@@ -4,27 +4,75 @@ const os = require('os');
 const { Pool } = require('pg');
 
 const databaseUrl = process.env.DATABASE_URL;
-const isPostgres = Boolean(databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')));
+let wantPostgres = Boolean(databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')));
+let isPostgres = wantPostgres;
 
-let db = null;
+let postgresDriver = null;
 let sqliteDbInstance = null;
+let sqliteDriver = null;
+let activeDriver = null;
 
 function convertPlaceholders(sql) {
   let i = 1;
   return sql.replace(/\?/g, () => `$${i++}`);
 }
 
-if (isPostgres) {
-  console.log('[Database] Menggunakan Neon PostgreSQL (Cloud)');
+function getSqliteDriver() {
+  if (sqliteDriver) return sqliteDriver;
+
+  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  let dataDir = isServerless ? os.tmpdir() : path.join(__dirname, '..', '..', 'data');
+  if (!isServerless && !fs.existsSync(dataDir)) {
+    try { fs.mkdirSync(dataDir, { recursive: true }); } catch (e) {}
+  }
+  const dbPath = process.env.DB_PATH || path.join(dataDir, 'muspimnas.db');
+  const { DatabaseSync } = require('node:sqlite');
+  sqliteDbInstance = new DatabaseSync(dbPath);
+
+  try {
+    sqliteDbInstance.exec('PRAGMA foreign_keys = ON;');
+    sqliteDbInstance.exec('PRAGMA journal_mode = WAL;');
+  } catch (e) {}
+
+  sqliteDriver = {
+    isPostgres: false,
+    sqliteDb: sqliteDbInstance,
+    async query(sql, params = []) {
+      return sqliteDbInstance.prepare(sql).all(...params);
+    },
+    async get(sql, params = []) {
+      return sqliteDbInstance.prepare(sql).get(...params) || null;
+    },
+    async all(sql, params = []) {
+      return sqliteDbInstance.prepare(sql).all(...params);
+    },
+    async run(sql, params = []) {
+      const res = sqliteDbInstance.prepare(sql).run(...params);
+      return {
+        changes: res.changes,
+        lastInsertRowid: res.lastInsertRowid
+      };
+    },
+    async exec(sql) {
+      return sqliteDbInstance.exec(sql);
+    }
+  };
+
+  return sqliteDriver;
+}
+
+if (wantPostgres) {
+  // Clean connection string if channel_binding is present
+  const cleanUrl = databaseUrl.replace('&channel_binding=require', '').replace('channel_binding=require&', '');
   const pool = new Pool({
-    connectionString: databaseUrl,
+    connectionString: cleanUrl,
     ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
     max: 10
   });
 
-  db = {
+  postgresDriver = {
     isPostgres: true,
     pool,
     async query(sql, params = []) {
@@ -58,52 +106,57 @@ if (isPostgres) {
       return await pool.query(sql);
     }
   };
+
+  activeDriver = postgresDriver;
 } else {
-  // SQLite Fallback (Local file)
-  console.log('[Database] Menggunakan SQLite lokal');
-  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-  let dataDir = isServerless ? os.tmpdir() : path.join(__dirname, '..', '..', 'data');
-  if (!isServerless && !fs.existsSync(dataDir)) {
-    try { fs.mkdirSync(dataDir, { recursive: true }); } catch (e) {}
-  }
-  const dbPath = process.env.DB_PATH || path.join(dataDir, 'muspimnas.db');
-  const { DatabaseSync } = require('node:sqlite');
-  sqliteDbInstance = new DatabaseSync(dbPath);
-
-  try {
-    sqliteDbInstance.exec('PRAGMA foreign_keys = ON;');
-    sqliteDbInstance.exec('PRAGMA journal_mode = WAL;');
-  } catch (e) {}
-
-  db = {
-    isPostgres: false,
-    sqliteDb: sqliteDbInstance,
-    async query(sql, params = []) {
-      return sqliteDbInstance.prepare(sql).all(...params);
-    },
-    async get(sql, params = []) {
-      return sqliteDbInstance.prepare(sql).get(...params) || null;
-    },
-    async all(sql, params = []) {
-      return sqliteDbInstance.prepare(sql).all(...params);
-    },
-    async run(sql, params = []) {
-      const res = sqliteDbInstance.prepare(sql).run(...params);
-      return {
-        changes: res.changes,
-        lastInsertRowid: res.lastInsertRowid
-      };
-    },
-    async exec(sql) {
-      return sqliteDbInstance.exec(sql);
-    }
-  };
+  activeDriver = getSqliteDriver();
 }
+
+// Proxy database object
+const db = {
+  get isPostgres() {
+    return activeDriver?.isPostgres ?? isPostgres;
+  },
+  get pool() {
+    return activeDriver?.pool;
+  },
+  get sqliteDb() {
+    return activeDriver?.sqliteDb;
+  },
+  async query(sql, params = []) {
+    return await activeDriver.query(sql, params);
+  },
+  async get(sql, params = []) {
+    return await activeDriver.get(sql, params);
+  },
+  async all(sql, params = []) {
+    return await activeDriver.all(sql, params);
+  },
+  async run(sql, params = []) {
+    return await activeDriver.run(sql, params);
+  },
+  async exec(sql) {
+    return await activeDriver.exec(sql);
+  }
+};
 
 // Initialize tables for both Postgres and SQLite
 async function initializeDatabase() {
-  if (isPostgres) {
-    await db.exec(`
+  if (wantPostgres && activeDriver === postgresDriver) {
+    try {
+      console.log('[Database] Menguji koneksi ke PostgreSQL (Cloud)...');
+      await activeDriver.query('SELECT 1');
+      console.log('[Database] Berhasil terhubung ke PostgreSQL.');
+    } catch (err) {
+      console.warn(`[Database] PostgreSQL tidak dapat diakses (${err.message}).`);
+      console.warn('[Database] Mengaktifkan mode aman SQLite lokal secara otomatis.');
+      isPostgres = false;
+      activeDriver = getSqliteDriver();
+    }
+  }
+
+  if (activeDriver.isPostgres) {
+    await activeDriver.exec(`
       CREATE TABLE IF NOT EXISTS admins (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
@@ -144,7 +197,7 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_allocations_participant ON room_allocations(participant_id);
     `);
   } else {
-    await db.exec(`
+    await activeDriver.exec(`
       CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
@@ -186,11 +239,11 @@ async function initializeDatabase() {
     `);
 
     try {
-      db.sqliteDb.exec('ALTER TABLE room_allocations ADD COLUMN left_at DATETIME NULL;');
+      activeDriver.sqliteDb.exec('ALTER TABLE room_allocations ADD COLUMN left_at DATETIME NULL;');
     } catch (e) {}
   }
 
-  // Auto-seed if database is freshly created
+  // Auto-seed default admin and initial data if database is freshly created
   try {
     const adminCheck = await db.get('SELECT COUNT(*) as count FROM admins');
     if (!adminCheck || Number(adminCheck.count) === 0) {
@@ -206,5 +259,7 @@ async function initializeDatabase() {
 module.exports = {
   db,
   initializeDatabase,
-  isPostgres
+  get isPostgres() {
+    return activeDriver?.isPostgres ?? isPostgres;
+  }
 };

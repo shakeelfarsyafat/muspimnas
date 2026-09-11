@@ -6,8 +6,10 @@ const { redirectIfAuth } = require('../middleware/auth');
 
 // GET /login
 router.get('/login', redirectIfAuth, (req, res) => {
-  const error = req.session.loginError;
-  delete req.session.loginError;
+  const error = req.session?.loginError || null;
+  if (req.session) {
+    delete req.session.loginError;
+  }
   res.render('login', { error, title: 'Login Admin - Sistem Sidang' });
 });
 
@@ -73,7 +75,10 @@ router.get('/logout', (req, res) => {
   if (typeof req.session?.destroy === 'function') {
     req.session.destroy(() => res.redirect('/login'));
   } else {
-    req.session = null;
+    if (req.session) {
+      delete req.session.admin;
+      req.session = null;
+    }
     res.redirect('/login');
   }
 });

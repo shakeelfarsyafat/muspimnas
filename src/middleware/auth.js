@@ -16,6 +16,9 @@ function requireAuth(req, res, next) {
     });
   }
 
+  if (!req.session) {
+    req.session = {};
+  }
   req.session.returnTo = req.originalUrl;
   return res.redirect('/login');
 }
