@@ -270,6 +270,90 @@ const participantService = {
     );
 
     return cards;
+  },
+
+  /**
+   * Bulk import participants from parsed Excel sheet
+   */
+  async importParticipants(records, defaultRoomId = null) {
+    // 1. Preload court rooms for matching by name or ID
+    const rooms = await db.all('SELECT id, room_name FROM court_rooms');
+    const roomMap = new Map();
+    rooms.forEach(r => {
+      roomMap.set(String(r.id), r.id);
+      roomMap.set(r.room_name.toLowerCase().trim(), r.id);
+    });
+
+    // 2. Preload existing identifier_nums to avoid duplicates
+    const existingIdentRows = await db.all('SELECT identifier_num FROM participants');
+    const existingSet = new Set(existingIdentRows.map(r => String(r.identifier_num).trim().toLowerCase()));
+
+    const results = {
+      total: records.length,
+      imported: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+      const rowNum = i + 2;
+
+      // Flexible column extraction
+      const name = (row['Nama Lengkap'] || row['Nama'] || row['name'] || '').toString().trim();
+      const ident = (row['Nomor Identitas'] || row['Identitas'] || row['NIM'] || row['NIK'] || row['NIP'] || row['identifier_num'] || '').toString().trim();
+      const inst = (row['Instansi'] || row['Lembaga'] || row['Delegasi'] || row['institution'] || '').toString().trim();
+      const roomInput = (row['Ruangan Sidang'] || row['Ruang Sidang'] || row['Ruang'] || row['room'] || '').toString().trim();
+
+      if (!name || !ident) {
+        results.skipped++;
+        results.errors.push(`Baris ${rowNum}: Nama atau Nomor Identitas kosong.`);
+        continue;
+      }
+
+      if (existingSet.has(ident.toLowerCase())) {
+        results.skipped++;
+        results.errors.push(`Baris ${rowNum} (${ident} - ${name}): Sudah terdaftar.`);
+        continue;
+      }
+
+      let targetRoomId = defaultRoomId ? Number(defaultRoomId) : null;
+      if (roomInput) {
+        const lower = roomInput.toLowerCase();
+        if (roomMap.has(lower)) {
+          targetRoomId = roomMap.get(lower);
+        } else {
+          for (const [key, id] of roomMap.entries()) {
+            if (lower.includes(key) || key.includes(lower)) {
+              targetRoomId = id;
+              break;
+            }
+          }
+        }
+      }
+
+      try {
+        const qr_token = uuidv4();
+        const insertRes = await db.run(
+          'INSERT INTO participants (name, identifier_num, institution, qr_token) VALUES (?, ?, ?, ?)',
+          [name, ident, inst, qr_token]
+        );
+        const participantId = Number(insertRes.lastInsertRowid);
+        if (targetRoomId) {
+          await db.run(
+            'INSERT INTO room_allocations (participant_id, room_id, is_attended) VALUES (?, ?, 0)',
+            [participantId, targetRoomId]
+          );
+        }
+        existingSet.add(ident.toLowerCase());
+        results.imported++;
+      } catch (err) {
+        results.skipped++;
+        results.errors.push(`Baris ${rowNum}: Gagal simpan (${err.message}).`);
+      }
+    }
+
+    return results;
   }
 };
 

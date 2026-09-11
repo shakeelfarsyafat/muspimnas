@@ -237,20 +237,54 @@
     btnStop?.addEventListener('click', stopCamera);
     btnSwitch?.addEventListener('click', switchCamera);
 
-    async function handleScan(token) {
-      const now = Date.now();
-      if (token === lastToken && (now - lastTime) < 1200) {
-        return;
-      }
+    let scanCooldownTimer = null;
 
+    window.resumeScanningNow = function() {
+      if (scanCooldownTimer) {
+        clearTimeout(scanCooldownTimer);
+        scanCooldownTimer = null;
+      }
+      if (feedbackBadge) {
+        feedbackBadge.classList.add('-translate-y-6', 'opacity-0');
+      }
+      lastToken = null;
+      isProcessing = false;
+      if (html5QrCode && isScanning) {
+        try {
+          html5QrCode.resume();
+        } catch (e) {}
+      }
+    };
+
+    async function handleScan(token) {
       if (isProcessing) return;
       isProcessing = true;
       lastToken = token;
-      lastTime = now;
 
-      // Subtle tap sensation on QR detection
+      // 1. IMMEDIATELY PAUSE SCANNER so NO extra frames are decoded while processing!
+      if (html5QrCode && isScanning) {
+        try {
+          html5QrCode.pause(true);
+        } catch (e) {}
+      }
+
+      // 2. Immediate subtle tap vibration
       if (navigator.vibrate) {
-        navigator.vibrate(30);
+        navigator.vibrate(35);
+      }
+
+      // 3. Instant UI feedback: "Memverifikasi..."
+      if (feedbackBadge) {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-2.5 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border border-indigo-400">
+            <i class="fas fa-circle-notch fa-spin text-lg text-indigo-200"></i>
+            <div>
+              <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-200">QR Terdeteksi</div>
+              <div class="text-xs font-bold">Memverifikasi Data Peserta...</div>
+            </div>
+          </div>
+        `;
+        feedbackBadge.classList.remove('-translate-y-6', 'opacity-0');
       }
 
       const roomId = roomSelect.value;
@@ -285,93 +319,121 @@
         showTransientFeedback(data);
       } catch (err) {
         console.error('Scan request error:', err);
-      } finally {
-        setTimeout(() => {
-          isProcessing = false;
-        }, 300);
+        showToast('Koneksi terganggu saat memverifikasi scan.', 'error');
+        window.resumeScanningNow();
       }
     }
 
     function showTransientFeedback(data) {
       if (!feedbackBadge) return;
 
-      const timeStr = data.participant?.time_display || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace('.', ':');
+      const timeStr = data.participant?.time_display || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\./g, ':');
 
       if (data.status === 'SUCCESS' || data.status === 'SUCCESS_REENTRY') {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-emerald-400">
-            <div class="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center font-bold text-sm">
-              <i class="fas fa-check"></i>
+          <div class="px-4 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl border-2 border-emerald-400">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                <i class="fas fa-check"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[10px] uppercase font-bold tracking-wider text-emerald-200">
+                  ${data.status === 'SUCCESS_REENTRY' ? 'Masuk Kembali' : 'Presensi Masuk Diterima'}
+                </div>
+                <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+                <div class="text-[10px] text-emerald-100 flex items-center mt-0.5 font-mono font-semibold">
+                  <i class="fas fa-clock mr-1 text-[9px]"></i> ${timeStr} WIB
+                </div>
+              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-emerald-200">
-                ${data.status === 'SUCCESS_REENTRY' ? 'Masuk Kembali' : 'Presensi Masuk Diterima'}
-              </div>
-              <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
-              <div class="text-[10px] text-emerald-100 flex items-center mt-0.5 font-mono font-semibold">
-                <i class="fas fa-clock mr-1 text-[9px]"></i> ${timeStr} WIB
-              </div>
+            <div class="mt-2 text-center pt-2 border-t border-emerald-500/50">
+              <button onclick="window.resumeScanningNow()" class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-[10px] font-bold transition">
+                <i class="fas fa-camera mr-1"></i> Pindai Berikutnya
+              </button>
             </div>
           </div>
         `;
       } else if (data.status === 'SUCCESS_OUT') {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-amber-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-400">
-            <div class="w-8 h-8 rounded-full bg-white text-amber-700 flex items-center justify-center font-bold text-sm">
-              <i class="fas fa-sign-out-alt"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Presensi Keluar Berhasil</div>
-              <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
-              <div class="text-[10px] text-amber-100 flex items-center mt-0.5 font-mono font-semibold">
-                <i class="fas fa-clock mr-1 text-[9px]"></i> Keluar: ${timeStr} WIB
+          <div class="px-4 py-3 bg-amber-600 text-white rounded-2xl shadow-2xl border-2 border-amber-400">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-full bg-white text-amber-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                <i class="fas fa-sign-out-alt"></i>
               </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Presensi Keluar Berhasil</div>
+                <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+                <div class="text-[10px] text-amber-100 flex items-center mt-0.5 font-mono font-semibold">
+                  <i class="fas fa-clock mr-1 text-[9px]"></i> Keluar: ${timeStr} WIB
+                </div>
+              </div>
+            </div>
+            <div class="mt-2 text-center pt-2 border-t border-amber-500/50">
+              <button onclick="window.resumeScanningNow()" class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-[10px] font-bold transition">
+                <i class="fas fa-camera mr-1"></i> Pindai Berikutnya
+              </button>
             </div>
           </div>
         `;
       } else if (data.status === 'WRONG_ROOM') {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-rose-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-400">
-            <div class="w-8 h-8 rounded-full bg-white text-rose-700 flex items-center justify-center font-bold text-sm">
-              <i class="fas fa-door-closed"></i>
+          <div class="px-4 py-3 bg-rose-600 text-white rounded-2xl shadow-2xl border-2 border-rose-400">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-full bg-white text-rose-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                <i class="fas fa-door-closed"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[10px] uppercase font-bold tracking-wider text-rose-200">Salah Ruangan!</div>
+                <div class="text-xs font-extrabold truncate">Ke: ${data.participant?.correct_room || 'Ruangan Lain'}</div>
+              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-rose-200">Salah Ruangan!</div>
-              <div class="text-xs font-extrabold truncate">Ke: ${data.participant?.correct_room || 'Ruangan Lain'}</div>
+            <div class="mt-2 text-center pt-2 border-t border-rose-500/50">
+              <button onclick="window.resumeScanningNow()" class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-[10px] font-bold transition">
+                <i class="fas fa-camera mr-1"></i> Pindai Berikutnya
+              </button>
             </div>
           </div>
         `;
       } else if (data.status === 'ALREADY_ATTENDED') {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-indigo-400">
-            <div class="w-8 h-8 rounded-full bg-white text-indigo-700 flex items-center justify-center font-bold text-sm">
-              <i class="fas fa-user-check"></i>
+          <div class="px-4 py-3 bg-indigo-600 text-white rounded-2xl shadow-2xl border-2 border-indigo-400">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-full bg-white text-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-200">Sudah Di Dalam Ruangan</div>
+                <div class="text-xs font-bold truncate">${data.participant?.name || 'Peserta'}</div>
+              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-200">Sudah Di Dalam Ruangan</div>
-              <div class="text-xs font-bold truncate">${data.participant?.name || 'Peserta'}</div>
+            <div class="mt-2 text-center pt-2 border-t border-indigo-500/50">
+              <button onclick="window.resumeScanningNow()" class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-[10px] font-bold transition">
+                <i class="fas fa-camera mr-1"></i> Pindai Berikutnya
+              </button>
             </div>
-          </div>
-        `;
-      } else if (data.status === 'ALREADY_LEFT' || data.status === 'NOT_ATTENDED') {
-        feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-amber-700 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-500">
-            <i class="fas fa-exclamation-triangle text-xl text-white"></i>
-            <div class="flex-1 text-xs font-bold">${data.message}</div>
           </div>
         `;
       } else {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-rose-700 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-500">
-            <i class="fas fa-times-circle text-xl text-white"></i>
-            <div class="text-xs font-bold">${data.message || 'QR Code Tidak Terdaftar'}</div>
+          <div class="px-4 py-3 bg-rose-700 text-white rounded-2xl shadow-2xl border-2 border-rose-500">
+            <div class="flex items-center space-x-3">
+              <i class="fas fa-times-circle text-xl text-white"></i>
+              <div class="text-xs font-bold">${data.message || 'QR Code Tidak Terdaftar'}</div>
+            </div>
+            <div class="mt-2 text-center pt-2 border-t border-rose-600/50">
+              <button onclick="window.resumeScanningNow()" class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-[10px] font-bold transition">
+                <i class="fas fa-camera mr-1"></i> Pindai Berikutnya
+              </button>
+            </div>
           </div>
         `;
       }
 
       feedbackBadge.classList.remove('-translate-y-6', 'opacity-0');
-      setTimeout(() => {
-        feedbackBadge.classList.add('-translate-y-6', 'opacity-0');
+
+      // Auto-resume camera after 2.5 seconds
+      scanCooldownTimer = setTimeout(() => {
+        window.resumeScanningNow();
       }, 2500);
     }
   });

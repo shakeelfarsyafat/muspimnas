@@ -242,4 +242,106 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Gagal reset absensi.', 'error');
     }
   };
+
+  // ==========================================
+  // Excel Import Modal Logic
+  // ==========================================
+  const importModal = document.getElementById('import-modal');
+  const importForm = document.getElementById('import-form');
+  const importFileInput = document.getElementById('import-file-input');
+  const importFileLabel = document.getElementById('import-file-label');
+  const importResultBox = document.getElementById('import-result-box');
+  const btnSubmitImport = document.getElementById('btn-submit-import');
+
+  window.openImportModal = function() {
+    if (importForm) importForm.reset();
+    if (importFileLabel) importFileLabel.innerHTML = 'Klik atau Tarik file Excel ke sini';
+    if (importResultBox) {
+      importResultBox.className = 'hidden p-3.5 rounded-xl text-xs font-medium';
+      importResultBox.innerHTML = '';
+    }
+    if (btnSubmitImport) {
+      btnSubmitImport.disabled = false;
+      btnSubmitImport.innerHTML = '<i class="fas fa-upload text-xs mr-1"></i> <span>Mulai Impor Peserta</span>';
+    }
+    importModal?.classList.remove('hidden');
+  };
+
+  window.closeImportModal = function() {
+    importModal?.classList.add('hidden');
+  };
+
+  // Update file input label on select
+  importFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file && importFileLabel) {
+      importFileLabel.innerHTML = `<span class="text-emerald-700 font-bold"><i class="fas fa-file-excel mr-1"></i> ${escapeHtml(file.name)}</span> (${(file.size / 1024).toFixed(1)} KB)`;
+    }
+  });
+
+  // Submit Import Form
+  importForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const file = importFileInput?.files[0];
+    if (!file) {
+      showToast('Pilih file Excel terlebih dahulu.', 'warning');
+      return;
+    }
+
+    const formData = new FormData(importForm);
+
+    btnSubmitImport.disabled = true;
+    btnSubmitImport.innerHTML = '<i class="fas fa-spinner fa-spin text-xs mr-1"></i> <span>Mengimpor Data...</span>';
+
+    try {
+      const res = await fetch('/api/participants/import-excel', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        importResultBox.className = 'p-3.5 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
+        importResultBox.innerHTML = `
+          <div class="font-bold flex items-center mb-1">
+            <i class="fas fa-check-circle mr-1.5 text-emerald-600"></i> ${escapeHtml(data.message)}
+          </div>
+          <div class="text-[11px] text-emerald-700">
+            Total Baris: <b>${data.result.total}</b> &bull; Berhasil: <b>${data.result.imported}</b> &bull; Dilewati/Sudah Ada: <b>${data.result.skipped}</b>
+          </div>
+        `;
+        showToast(`Sukses mengimpor ${data.result.imported} peserta!`, 'success');
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        importResultBox.className = 'p-3.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+        importResultBox.innerHTML = `
+          <div class="font-bold flex items-center mb-1">
+            <i class="fas fa-exclamation-circle mr-1.5 text-rose-600"></i> Gagal Impor
+          </div>
+          <div class="text-[11px] text-rose-700">${escapeHtml(data.message || 'Terjadi kesalahan.')}</div>
+        `;
+        btnSubmitImport.disabled = false;
+        btnSubmitImport.innerHTML = '<i class="fas fa-upload text-xs mr-1"></i> <span>Coba Lagi</span>';
+      }
+    } catch (err) {
+      console.error('Import submit error:', err);
+      showToast('Terjadi kesalahan koneksi saat mengunggah file.', 'error');
+      btnSubmitImport.disabled = false;
+      btnSubmitImport.innerHTML = '<i class="fas fa-upload text-xs mr-1"></i> <span>Mulai Impor Peserta</span>';
+    }
+  });
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 });

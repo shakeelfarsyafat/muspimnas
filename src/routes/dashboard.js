@@ -1,5 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const xlsx = require('xlsx');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 const { requireAuth } = require('../middleware/auth');
 const participantService = require('../services/participantService');
 const roomService = require('../services/roomService');
@@ -67,6 +73,102 @@ router.post('/api/participants', async (req, res) => {
     return res.status(400).json({
       success: false,
       message: err.message || 'Gagal menambahkan peserta.'
+    });
+  }
+});
+
+// API: Download Excel Template
+router.get('/api/participants/template', async (req, res) => {
+  try {
+    const rooms = await roomService.getAllRooms();
+    const roomNames = rooms.map(r => r.room_name);
+
+    const headers = ['Nama Lengkap', 'Nomor Identitas', 'Instansi', 'Ruangan Sidang'];
+    const data = [
+      {
+        'Nama Lengkap': 'Dr. H. Bambang Sudibyo, M.Si',
+        'Nomor Identitas': '3201012304900001',
+        'Instansi': 'DPW Jawa Barat',
+        'Ruangan Sidang': roomNames[0] || 'Ruang Sidang Komisi A (Ruang Mahoni)'
+      },
+      {
+        'Nama Lengkap': 'Siti Rahmawati, S.Pd',
+        'Nomor Identitas': '20210811002',
+        'Instansi': 'DPC Kota Bandung',
+        'Ruangan Sidang': roomNames[1] || 'Ruang Sidang Komisi B (Ruang Cendana)'
+      },
+      {
+        'Nama Lengkap': 'Ahmad Fauzi, S.T.',
+        'Nomor Identitas': '198504122010011002',
+        'Instansi': 'Universitas Indonesia',
+        'Ruangan Sidang': ''
+      }
+    ];
+
+    const wb = xlsx.utils.book_new();
+    const ws = xlsx.utils.json_to_sheet(data, { header: headers });
+    ws['!cols'] = [{ wch: 32 }, { wch: 25 }, { wch: 30 }, { wch: 42 }];
+    xlsx.utils.book_append_sheet(wb, ws, 'Template Peserta');
+
+    // Sheet 2: Referensi Ruangan Sidang yang Terdaftar
+    if (rooms.length > 0) {
+      const roomSheetData = rooms.map(r => ({
+        'ID Ruangan': r.id,
+        'Nama Ruangan': r.room_name,
+        'Judul Sesi': r.session_title,
+        'Kapasitas': r.capacity
+      }));
+      const wsRooms = xlsx.utils.json_to_sheet(roomSheetData);
+      wsRooms['!cols'] = [{ wch: 12 }, { wch: 35 }, { wch: 40 }, { wch: 12 }];
+      xlsx.utils.book_append_sheet(wb, wsRooms, 'Daftar Ruangan Referensi');
+    }
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="template_peserta_muspimnas.xlsx"');
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Template export error:', err);
+    return res.status(500).send('Gagal membuat template Excel: ' + err.message);
+  }
+});
+
+// API: Import Participants via Excel
+router.post('/api/participants/import-excel', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: 'File Excel belum dipilih atau tidak valid.'
+      });
+    }
+
+    const defaultRoomId = req.body.default_room_id ? Number(req.body.default_room_id) : null;
+    const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'File Excel kosong atau tidak ditemukan baris data peserta.'
+      });
+    }
+
+    const result = await participantService.importParticipants(rows, defaultRoomId);
+
+    return res.json({
+      success: true,
+      message: `Impor data selesai! ${result.imported} peserta berhasil ditambahkan, ${result.skipped} dilewati.`,
+      result
+    });
+  } catch (err) {
+    console.error('Import excel error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal memproses file Excel: ' + (err.message || err)
     });
   }
 });
