@@ -17,16 +17,17 @@ app.use(express.json());
 // Static Files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session Configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'muspimnas-super-secret-key-2026',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    httpOnly: true,
-    sameSite: 'lax'
-  }
+// Trust Proxy (Required for Vercel HTTPS reverse proxy)
+app.set('trust proxy', 1);
+
+// Cookie-based Session Configuration (Ensures sessions persist across Vercel serverless lambdas)
+const cookieSession = require('cookie-session');
+app.use(cookieSession({
+  name: 'muspimnas_session',
+  keys: [process.env.SESSION_SECRET || 'muspimnas-super-secret-key-2026'],
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  sameSite: 'lax',
+  httpOnly: true
 }));
 
 // Template Engine

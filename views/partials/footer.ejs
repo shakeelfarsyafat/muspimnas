@@ -7,8 +7,32 @@
     </div>
   </footer>
 
+  <!-- Fixed Mobile Bottom Navigation Bar (Visible on phones for instant 1-tap switching) -->
+  <% if (typeof currentAdmin !== 'undefined' && currentAdmin) { %>
+  <div class="no-print md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 flex items-center justify-around py-2 px-1 shadow-2xl">
+    <a href="/dashboard" class="flex flex-col items-center py-1 px-2.5 rounded-lg text-[10px] font-semibold transition <%= typeof currentPath !== 'undefined' && (currentPath === '/dashboard' || currentPath === '/') ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200' %>">
+      <i class="fas fa-users text-sm mb-0.5"></i>
+      <span>Peserta</span>
+    </a>
+    <a href="/rooms" class="flex flex-col items-center py-1 px-2.5 rounded-lg text-[10px] font-semibold transition <%= typeof currentPath !== 'undefined' && currentPath === '/rooms' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200' %>">
+      <i class="fas fa-door-open text-sm mb-0.5"></i>
+      <span>Ruangan</span>
+    </a>
+    <a href="/scanner" class="flex flex-col items-center py-1 px-2.5 rounded-lg text-[10px] font-semibold transition <%= typeof currentPath !== 'undefined' && currentPath === '/scanner' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200' %>">
+      <i class="fas fa-desktop text-sm mb-0.5"></i>
+      <span>Monitor</span>
+    </a>
+    <a href="/scanner/camera" class="flex flex-col items-center py-1 px-2.5 rounded-lg text-[10px] font-semibold transition <%= typeof currentPath !== 'undefined' && currentPath === '/scanner/camera' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200' %>">
+      <i class="fas fa-camera text-sm mb-0.5"></i>
+      <span>Kamera HP</span>
+    </a>
+  </div>
+  <!-- Space buffer so footer doesn't get covered by bottom bar on mobile -->
+  <div class="h-14 md:hidden"></div>
+  <% } %>
+
   <!-- Toast Notification Container -->
-  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-3 pointer-events-none max-w-sm w-full"></div>
+  <div id="toast-container" class="fixed bottom-16 md:bottom-6 right-6 z-50 flex flex-col space-y-3 pointer-events-none max-w-sm w-full"></div>
 
 </body>
 </html>

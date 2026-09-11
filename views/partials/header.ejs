@@ -109,15 +109,89 @@
             <span class="font-bold text-slate-200 text-xs"><%= currentAdmin.username %></span>
           </div>
 
-          <a href="/logout" class="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20 transition-all text-xs font-bold flex items-center space-x-1" title="Keluar dari Sistem">
+          <a href="/logout" class="hidden sm:flex px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20 transition-all text-xs font-bold items-center space-x-1" title="Keluar dari Sistem">
             <i class="fas fa-arrow-right-from-bracket text-[11px]"></i>
             <span>Logout</span>
           </a>
+
+          <!-- Mobile Hamburger Toggle Button -->
+          <button 
+            id="mobile-menu-toggle" 
+            type="button" 
+            class="md:hidden p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition focus:outline-none"
+            title="Menu Navigasi"
+            aria-label="Buka Menu"
+          >
+            <i class="fas fa-bars text-base" id="mobile-menu-icon"></i>
+          </button>
         </div>
 
       </div>
     </div>
+
+    <!-- Mobile Collapsible Navigation Drawer (Visible on phones when hamburger is clicked) -->
+    <div id="mobile-menu-drawer" class="md:hidden hidden bg-slate-900 border-t border-slate-800/80 px-4 py-3 space-y-1 transition-all">
+      <a href="/dashboard" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold <%= typeof currentPath !== 'undefined' && (currentPath === '/dashboard' || currentPath === '/') ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' %>">
+        <i class="fas fa-users w-4 text-center"></i>
+        <span>Peserta Sidang</span>
+      </a>
+
+      <a href="/rooms" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold <%= typeof currentPath !== 'undefined' && currentPath === '/rooms' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' %>">
+        <i class="fas fa-door-open w-4 text-center"></i>
+        <span>Ruangan Sidang</span>
+      </a>
+
+      <a href="/scanner" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold <%= typeof currentPath !== 'undefined' && currentPath === '/scanner' ? 'bg-emerald-600 text-white' : 'text-emerald-400 hover:bg-slate-800' %>">
+        <i class="fas fa-desktop w-4 text-center"></i>
+        <span>Layar Monitor</span>
+      </a>
+
+      <a href="/scanner/camera" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold <%= typeof currentPath !== 'undefined' && currentPath === '/scanner/camera' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' %>">
+        <i class="fas fa-camera w-4 text-center text-indigo-400"></i>
+        <span>Kamera HP Pintu</span>
+      </a>
+
+      <a href="/print?ids=all" target="_blank" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white">
+        <i class="fas fa-print w-4 text-center"></i>
+        <span>Cetak Semua ID Card</span>
+      </a>
+
+      <div class="pt-2.5 mt-2 border-t border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2 text-xs text-slate-400">
+          <i class="fas fa-user-shield text-indigo-400"></i>
+          <span>Petugas: <b class="text-slate-200"><%= currentAdmin.username %></b></span>
+        </div>
+        <a href="/logout" class="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20 text-xs font-bold flex items-center space-x-1">
+          <i class="fas fa-arrow-right-from-bracket text-[10px]"></i>
+          <span>Logout</span>
+        </a>
+      </div>
+    </div>
+
   </nav>
+
+  <script>
+    // Toggle Mobile Navigation Drawer
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleBtn = document.getElementById('mobile-menu-toggle');
+      const drawer = document.getElementById('mobile-menu-drawer');
+      const icon = document.getElementById('mobile-menu-icon');
+
+      toggleBtn?.addEventListener('click', () => {
+        if (!drawer) return;
+        const isHidden = drawer.classList.contains('hidden');
+        if (isHidden) {
+          drawer.classList.remove('hidden');
+          icon?.classList.remove('fa-bars');
+          icon?.classList.add('fa-times');
+        } else {
+          drawer.classList.add('hidden');
+          icon?.classList.remove('fa-times');
+          icon?.classList.add('fa-bars');
+        }
+      });
+    });
+  </script>
   <% } %>
 
   <main class="flex-1">
