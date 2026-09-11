@@ -1,0 +1,179 @@
+<%- include('partials/header') %>
+
+<div id="scanner-terminal-container" class="max-w-7xl mx-auto px-3 sm:px-6 py-3 transition-all duration-300 flex flex-col min-h-[calc(100vh-5rem)]">
+
+  <!-- SLIM & COMPACT TOP BAR: Room & Attendance Stats Only -->
+  <div class="glass-panel rounded-xl px-4 py-2.5 shadow-xs border border-slate-200 mb-3 flex flex-wrap items-center justify-between gap-3">
+    
+    <!-- Left: Title, Live Status & Room Selector -->
+    <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+      <div class="flex items-center space-x-2">
+        <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs shadow-xs">
+          <i class="fas fa-desktop"></i>
+        </div>
+        <span class="text-sm font-black text-slate-800 tracking-tight">Monitor Sidang</span>
+        <span id="sse-status-badge" class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 tracking-wider flex items-center">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span> Live
+        </span>
+      </div>
+
+      <!-- Room Dropdown -->
+      <div class="flex items-center space-x-1.5 pl-2 border-l border-slate-200">
+        <select 
+          id="scanner-room-select" 
+          class="px-2.5 py-1 bg-white border border-indigo-500 text-slate-900 font-bold rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs"
+        >
+          <% rooms.forEach(r => { %>
+            <option value="<%= r.id %>" <%= selectedRoomId === r.id ? 'selected' : '' %>>
+              <%= r.room_name %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <!-- Right: Attendance Metrics & Fullscreen Icon Button -->
+    <div class="flex items-center space-x-3">
+      
+      <!-- Metrics Badges: Hadir, Belum Hadir, Kapasitas -->
+      <div class="flex items-center space-x-1 bg-slate-100/90 p-1 rounded-lg border border-slate-200 text-xs">
+        <div class="px-2.5 py-0.5 bg-white rounded-md shadow-2xs text-center">
+          <span class="text-[8.5px] text-slate-400 uppercase font-bold tracking-wider block">Hadir</span>
+          <span class="font-black text-emerald-600 text-xs" id="stat-room-attended">
+            <%= currentRoomStats ? currentRoomStats.attended : 0 %>
+          </span>
+        </div>
+        <div class="px-2.5 py-0.5 bg-white rounded-md shadow-2xs text-center">
+          <span class="text-[8.5px] text-slate-400 uppercase font-bold tracking-wider block">Belum Hadir</span>
+          <span class="font-black text-amber-600 text-xs" id="stat-room-unattended">
+            <%= currentRoomStats ? currentRoomStats.unattended : 0 %>
+          </span>
+        </div>
+        <div class="px-2.5 py-0.5 bg-white rounded-md shadow-2xs text-center">
+          <span class="text-[8.5px] text-slate-400 uppercase font-bold tracking-wider block">Kapasitas</span>
+          <span class="font-bold text-slate-600 text-xs">
+            <%= currentRoomStats ? currentRoomStats.capacity : 0 %>
+          </span>
+        </div>
+      </div>
+
+      <!-- Icon-Only Fullscreen Button (Tanpa Teks) -->
+      <button 
+        id="btn-toggle-fullscreen" 
+        class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-900 text-white transition flex items-center justify-center shadow-xs text-xs"
+        title="Layar Penuh (F11)"
+      >
+        <i class="fas fa-expand"></i>
+      </button>
+
+      <!-- Invisible Keepalive Hardware Input (For USB Laser Scanners at the desk) -->
+      <form id="manual-scan-form" class="inline-block w-0 h-0 overflow-hidden opacity-0">
+        <input type="text" id="hardware-scanner-input" autocomplete="off">
+      </form>
+
+    </div>
+
+  </div>
+
+  <!-- CENTER STAGE: HASIL VERIFIKASI PESERTA SECARA REALTIME (COMPACT & HIGH IMPACT) -->
+  <div class="mb-3">
+    <div 
+      id="scan-result-card" 
+      class="glass-panel rounded-xl px-5 py-3 border border-slate-200 shadow-xs flex items-center justify-between transition-all duration-300 min-h-[60px]"
+    >
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm flex-shrink-0">
+          <i class="fas fa-qrcode"></i>
+        </div>
+        <div>
+          <h3 class="text-xs font-bold text-slate-700 leading-tight">
+            Terminal Siap Menampilkan Hasil Verifikasi
+          </h3>
+          <p class="text-[11px] text-slate-400">
+            Pindai via Kamera HP atau Scanner USB. Data peserta yang diverifikasi otomatis muncul di sini.
+          </p>
+        </div>
+      </div>
+
+      <div class="text-[11px] text-slate-400 font-mono hidden sm:block">
+        <i class="fas fa-satellite-dish mr-1 text-emerald-500 animate-pulse"></i> Live Listener
+      </div>
+    </div>
+  </div>
+
+  <!-- RIWAYAT PEMINDAIAN: TABEL BIASA DATABASE (COMPACT, FIT-TO-SCREEN, ZERO SCROLL) -->
+  <div class="glass-panel rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
+    
+    <!-- Table Header Bar -->
+    <div class="px-4 py-2 bg-slate-100/90 border-b border-slate-200 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i class="fas fa-table-list text-indigo-600 text-xs"></i>
+        <h3 class="text-xs font-bold text-slate-800">
+          Riwayat Kehadiran Peserta di Ruangan Ini
+        </h3>
+      </div>
+      <div class="text-[10.5px] text-slate-500 flex items-center space-x-1.5 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+        <span>Sinkronisasi Realtime</span>
+      </div>
+    </div>
+
+    <!-- The Database Table Container (Takes remaining height cleanly) -->
+    <div class="overflow-x-auto overflow-y-auto flex-1 max-h-[calc(100vh-17rem)]">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px] sticky top-0 z-10 shadow-2xs">
+          <tr>
+            <th scope="col" class="py-2.5 px-3 w-10 text-center">#</th>
+            <th scope="col" class="py-2.5 px-3 w-28">Waktu Masuk</th>
+            <th scope="col" class="py-2.5 px-3">Nama Peserta</th>
+            <th scope="col" class="py-2.5 px-3 w-36">NIM / NIK</th>
+            <th scope="col" class="py-2.5 px-3">Instansi / Delegasi</th>
+            <th scope="col" class="py-2.5 px-3 text-center w-28">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 bg-white" id="live-scans-table-body">
+          <% if (recentScans && recentScans.length > 0) { %>
+            <% recentScans.forEach((scan, idx) => { %>
+              <tr class="hover:bg-slate-50/90 transition text-xs">
+                <td class="py-2 px-3 text-center font-mono text-slate-400 font-semibold text-[11px]">
+                  <%= idx + 1 %>
+                </td>
+                <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px]">
+                  <i class="fas fa-clock text-slate-400 mr-1 text-[9px]"></i>
+                  <%= scan.attended_at ? (scan.attended_at.includes(' ') ? scan.attended_at.split(' ')[1] : scan.attended_at) : '-' %>
+                </td>
+                <td class="py-2 px-3 font-bold text-slate-900">
+                  <%= scan.name %>
+                </td>
+                <td class="py-2 px-3 font-mono text-slate-600 text-[11px]">
+                  <%= scan.identifier_num %>
+                </td>
+                <td class="py-2 px-3 text-slate-600">
+                  <%= scan.institution || '-' %>
+                </td>
+                <td class="py-2 px-3 text-center">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                    <i class="fas fa-check mr-1 text-[8px]"></i> Hadir
+                  </span>
+                </td>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr id="empty-history-row">
+              <td colspan="6" class="py-8 text-center text-slate-400 text-xs">
+                <i class="fas fa-inbox text-xl mb-1 text-slate-300 block"></i>
+                Belum ada data kehadiran pada ruangan ini.
+              </td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="/js/scanner.js"></script>
+
+<%- include('partials/footer') %>

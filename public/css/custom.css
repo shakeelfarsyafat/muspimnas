@@ -1,0 +1,216 @@
+/* Custom CSS for Sistem Sidang MUSPIMNAS */
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Scanner Laser Line Animation */
+.scan-line {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0) 0%, #ef4444 50%, rgba(239, 68, 68, 0) 100%);
+  box-shadow: 0 0 8px 1px #ef4444;
+  animation: scanMove 2.2s infinite ease-in-out;
+}
+
+@keyframes scanMove {
+  0% { top: 5%; opacity: 0.8; }
+  50% { top: 92%; opacity: 1; }
+  100% { top: 5%; opacity: 0.8; }
+}
+
+/* Success Pulse */
+@keyframes successPulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.pulse-success {
+  animation: successPulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Shake Animation on Error */
+@keyframes shakeAlert {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.shake-error {
+  animation: shakeAlert 0.4s ease-in-out;
+}
+
+/* Kiosk Fullscreen Stage */
+.kiosk-fullscreen:fullscreen {
+  background-color: #090d16 !important;
+  padding: 1.5rem !important;
+  overflow-y: auto !important;
+}
+
+/* Target Reticle Viewfinder for Camera */
+.qr-viewfinder {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border: 2px solid rgba(99, 102, 241, 0.6);
+  border-radius: 16px;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.65);
+  pointer-events: none;
+}
+.qr-viewfinder::before,
+.qr-viewfinder::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: #4f46e5;
+}
+.qr-viewfinder::before {
+  top: -2px; left: -2px;
+  border-top: 4px solid #6366f1;
+  border-left: 4px solid #6366f1;
+  border-top-left-radius: 14px;
+}
+.qr-viewfinder::after {
+  bottom: -2px; right: -2px;
+  border-bottom: 4px solid #6366f1;
+  border-right: 4px solid #6366f1;
+  border-bottom-right-radius: 14px;
+}
+
+/* Live Table Highlight for New Scan */
+@keyframes rowHighlight {
+  0% { background-color: rgba(16, 185, 129, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.table-row-new {
+  animation: rowHighlight 2.5s ease-out;
+}
+
+/* Floating Action Toolbar */
+.floating-toolbar {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.floating-toolbar.active {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ID Card Printable Styles */
+.id-card-wrapper {
+  width: 86mm;
+  height: 125mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  border-radius: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ID Card Grid in browser preview */
+.id-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86mm, 1fr));
+  gap: 20px;
+  justify-items: center;
+  padding: 20px;
+}
+
+/* PRINT MEDIA QUERIES */
+@media print {
+  /* Hide non-printable elements */
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .no-print,
+  nav,
+  header,
+  footer,
+  .print-controls,
+  .btn-print,
+  .floating-toolbar,
+  #toast-container {
+    display: none !important;
+  }
+
+  /* Optimize page layout for A4 print */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 8mm;
+  }
+
+  .print-page-container {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .id-card-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 86mm) !important;
+    gap: 8mm !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .id-card-wrapper {
+    box-shadow: none !important;
+    border: 1px dashed #94a3b8 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 6mm !important;
+  }
+}

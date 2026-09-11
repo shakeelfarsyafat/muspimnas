@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/custom.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+  <!-- Top Action Toolbar (Hidden during window.print()) -->
+  <div class="no-print sticky top-0 z-50 bg-slate-900 text-white px-6 py-4 shadow-xl border-b border-slate-800 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">
+        <i class="fas fa-print"></i>
+      </div>
+      <div>
+        <h2 class="text-sm font-bold text-white leading-tight">Generator Kartu Tanda Pengenal Peserta</h2>
+        <p class="text-xs text-slate-400">Total: <b><%= cards.length %> Kartu</b> &bull; Format Standar ID Card Panitia</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <a 
+        href="/dashboard" 
+        class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition"
+      >
+        &larr; Kembali ke Dashboard
+      </a>
+      <button 
+        onclick="window.print()" 
+        class="btn-print px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center"
+      >
+        <i class="fas fa-print mr-2"></i> Cetak Sekarang (Ctrl + P)
+      </button>
+    </div>
+  </div>
+
+  <!-- Cards Grid View Container -->
+  <div class="print-page-container max-w-6xl mx-auto py-8">
+    <div class="id-card-grid">
+      <% cards.forEach(card => { %>
+        <!-- Individual Participant Card -->
+        <div class="id-card-wrapper bg-white flex flex-col justify-between border border-slate-300">
+          
+          <!-- Card Header Ribbon -->
+          <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3 text-center relative">
+            <div class="flex items-center justify-center space-x-2">
+              <i class="fas fa-landmark text-indigo-400 text-xs"></i>
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-indigo-200">MUSPIMNAS 2026</span>
+            </div>
+            <div class="text-[11px] font-black tracking-wide text-white uppercase mt-0.5">
+              Musyawarah Pimpinan Nasional
+            </div>
+            <div class="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider">
+              Tanda Pengenal Peserta Sidang
+            </div>
+          </div>
+
+          <!-- Card Body: Participant Identity -->
+          <div class="p-3 text-center flex-1 flex flex-col justify-center items-center">
+            
+            <!-- Participant Avatar Icon -->
+            <div class="w-11 h-11 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-600 mb-2">
+              <i class="fas fa-user-tie text-lg"></i>
+            </div>
+
+            <!-- Participant Name -->
+            <h3 class="text-sm font-extrabold text-slate-900 leading-tight px-1">
+              <%= card.name %>
+            </h3>
+
+            <!-- Identifier (NIM / NIK) -->
+            <div class="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md mt-1 border border-indigo-100">
+              <%= card.identifier_num %>
+            </div>
+
+            <!-- Institution -->
+            <div class="text-[10px] text-slate-600 font-medium mt-1 leading-snug px-2">
+              <%= card.institution || 'Delegasi Peserta' %>
+            </div>
+
+            <!-- QR Code Section -->
+            <div class="mt-2.5 p-1.5 bg-white border border-slate-200 rounded-xl shadow-xs">
+              <img 
+                src="<%= card.qrDataUrl %>" 
+                alt="QR Code <%= card.identifier_num %>" 
+                class="w-28 h-28 mx-auto block object-contain"
+              >
+            </div>
+
+            <!-- Token snippet -->
+            <div class="text-[8px] font-mono text-slate-400 mt-1">
+              ID: <%= card.qr_token.slice(0, 16) %>...
+            </div>
+
+          </div>
+
+          <!-- Card Footer: Room & Session Info -->
+          <div class="bg-slate-50 border-t border-slate-200 p-2.5 text-center">
+            <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Ruang & Sesi Sidang:</div>
+            <div class="text-[11px] font-extrabold text-indigo-950 mt-0.5 leading-tight">
+              <%= card.room_name %>
+            </div>
+            <div class="text-[9px] text-slate-600 font-medium truncate mt-0.5">
+              <%= card.session_title %>
+            </div>
+            <div class="mt-1.5 pt-1 border-t border-slate-200/80 text-[7.5px] text-slate-400 uppercase tracking-tight">
+              Pindai QR di pintu masuk ruangan sidang
+            </div>
+          </div>
+
+        </div>
+      <% }) %>
+    </div>
+  </div>
+
+</body>
+</html>

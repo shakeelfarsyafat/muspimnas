@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Admin - MUSPIMNAS Sistem Sidang</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/custom.css">
+</head>
+<body class="bg-slate-950 font-sans text-slate-100 min-h-screen flex items-center justify-center p-4 relative overflow-hidden selection:bg-indigo-500 selection:text-white">
+
+  <!-- Background decorative light orbs -->
+  <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="w-full max-w-md relative z-10">
+    
+    <!-- Header / Brand -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 shadow-xl shadow-indigo-500/25 mb-4 border border-indigo-400/30">
+        <i class="fas fa-shield-alt text-2xl text-white"></i>
+      </div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-white">
+        MUSPIMNAS <span class="text-indigo-400">2026</span>
+      </h1>
+      <p class="text-xs text-slate-400 mt-1 uppercase tracking-widest font-semibold">
+        Sistem Manajemen Peserta Sidang & Verifikasi QR
+      </p>
+      <div class="inline-block mt-3 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[11px] text-amber-400 font-medium">
+        <i class="fas fa-lock mr-1"></i> Closed System &bull; Khusus Akses Panitia/Admin
+      </div>
+    </div>
+
+    <!-- Login Card -->
+    <div class="glass-dark rounded-2xl p-8 shadow-2xl border border-slate-800">
+      
+      <% if (typeof error !== 'undefined' && error) { %>
+      <div class="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-center">
+        <i class="fas fa-exclamation-circle text-rose-400 text-lg mr-3 flex-shrink-0"></i>
+        <span><%= error %></span>
+      </div>
+      <% } %>
+
+      <form action="/login" method="POST" class="space-y-5">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">Username Admin</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+              <i class="fas fa-user text-sm"></i>
+            </div>
+            <input 
+              type="text" 
+              name="username" 
+              id="username" 
+              required 
+              value="admin"
+              placeholder="Masukkan username"
+              class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">Password</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+              <i class="fas fa-key text-sm"></i>
+            </div>
+            <input 
+              type="password" 
+              name="password" 
+              id="password" 
+              required 
+              value="admin123"
+              placeholder="Masukkan password"
+              class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+            >
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all duration-200 flex items-center justify-center space-x-2"
+        >
+          <span>Masuk ke Dashboard</span>
+          <i class="fas fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+
+      <!-- Quick test credentials hint -->
+      <div class="mt-6 pt-5 border-t border-slate-800 text-center">
+        <p class="text-xs text-slate-400">
+          Akun Default Seeding: <code class="text-indigo-300 bg-slate-800/80 px-1.5 py-0.5 rounded">admin</code> / <code class="text-indigo-300 bg-slate-800/80 px-1.5 py-0.5 rounded">admin123</code>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Security footnote -->
+    <p class="text-center text-[11px] text-slate-600 mt-6">
+      Tidak ada pendaftaran akun publik. Peserta sidang hanya mendapatkan kartu fisik ber-QR dari panitia pelaksana.
+    </p>
+
+  </div>
+
+</body>
+</html>

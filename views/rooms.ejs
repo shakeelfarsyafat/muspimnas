@@ -1,0 +1,327 @@
+<%- include('partials/header') %>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-black tracking-tight text-slate-900">
+        Manajemen Ruangan Sidang & Sesi
+      </h1>
+      <p class="text-sm text-slate-500 mt-1">
+        Kelola daftar ruangan sidang, kapasitas kursi, dan pantau rasio kehadiran peserta per ruangan secara real-time.
+      </p>
+    </div>
+    <button 
+      onclick="openAddRoomModal()"
+      class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-500/20 transition"
+    >
+      <i class="fas fa-plus mr-2"></i> Tambah Ruang Sidang
+    </button>
+  </div>
+
+  <!-- Room Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <% rooms.forEach(room => { %>
+      <div class="glass-panel rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition">
+        <div>
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+              <i class="fas fa-door-open"></i>
+            </div>
+            <% if (room.is_active) { %>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span> Aktif
+              </span>
+            <% } else { %>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                Nonaktif
+              </span>
+            <% } %>
+          </div>
+
+          <h3 class="text-lg font-bold text-slate-900 mt-4 leading-snug"><%= room.room_name %></h3>
+          <p class="text-xs text-indigo-600 font-semibold mt-1">
+            <i class="fas fa-calendar-alt mr-1"></i> <%= room.session_title %>
+          </p>
+
+          <!-- Attendance & Capacity Progress -->
+          <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-100">
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="text-slate-500 font-medium">Tingkat Keterisian Kursi:</span>
+              <span class="font-bold text-slate-800"><%= room.attended %> / <%= room.capacity %> (<%= room.attendance_percentage %>%)</span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+              <div 
+                class="h-2 rounded-full transition-all duration-500 <%= room.attendance_percentage > 90 ? 'bg-rose-500' : (room.attendance_percentage > 60 ? 'bg-indigo-600' : 'bg-emerald-500') %>"
+                style="width: <%= Math.min(100, room.attendance_percentage) %>%;"
+              ></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-200 text-center text-xs">
+              <div>
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Terdaftar</span>
+                <b class="text-slate-700"><%= room.allocated %></b> Peserta
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Sisa Kursi</span>
+                <b class="text-emerald-700"><%= room.remaining_capacity %></b> Kursi
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Links -->
+        <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+          <a 
+            href="/scanner?room_id=<%= room.id %>" 
+            class="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-800"
+          >
+            <i class="fas fa-barcode mr-1.5"></i> Buka Scanner Pintu &rarr;
+          </a>
+
+          <div class="flex items-center space-x-1">
+            <button 
+              onclick="openEditRoomModal(<%= room.id %>)"
+              class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition"
+              title="Edit Ruangan"
+            >
+              <i class="fas fa-pencil-alt text-xs"></i>
+            </button>
+            <button 
+              onclick="deleteRoom(<%= room.id %>, '<%= room.room_name %>')"
+              class="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition"
+              title="Hapus Ruangan"
+            >
+              <i class="fas fa-trash-alt text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    <% }) %>
+  </div>
+
+</div>
+
+<!-- Modal Add / Edit Room -->
+<div id="room-modal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+    <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+      <h3 class="text-lg font-bold text-slate-900" id="room-modal-title">Tambah Ruang Sidang</h3>
+      <button onclick="closeRoomModal()" class="text-slate-400 hover:text-slate-600">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+
+    <form id="room-form" class="space-y-4 mt-5">
+      <input type="hidden" id="room-id">
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Nama Ruangan Sidang <span class="text-rose-500">*</span>
+        </label>
+        <input 
+          type="text" 
+          id="room-name" 
+          required 
+          placeholder="Contoh: Ruang Sidang Pleno Utama (Graha Kencana)"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Judul Sesi Sidang / Agenda <span class="text-rose-500">*</span>
+        </label>
+        <input 
+          type="text" 
+          id="session-title" 
+          required 
+          placeholder="Contoh: Sidang Komisi Keorganisasian & AD/ART"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            Kapasitas Kursi
+          </label>
+          <input 
+            type="number" 
+            id="room-capacity" 
+            value="50" 
+            min="1" 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            Status Ruangan
+          </label>
+          <select 
+            id="room-active" 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+          >
+            <option value="1">Aktif</option>
+            <option value="0">Nonaktif</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+        <button 
+          type="button" 
+          onclick="closeRoomModal()"
+          class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+        >
+          Batal
+        </button>
+        <button 
+          type="submit" 
+          class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition"
+        >
+          Simpan Ruangan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const roomModal = document.getElementById('room-modal');
+    const roomForm = document.getElementById('room-form');
+    const roomIdInput = document.getElementById('room-id');
+    const roomNameInput = document.getElementById('room-name');
+    const sessionTitleInput = document.getElementById('session-title');
+    const roomCapacityInput = document.getElementById('room-capacity');
+    const roomActiveInput = document.getElementById('room-active');
+    const roomModalTitle = document.getElementById('room-modal-title');
+    const submitBtn = roomForm?.querySelector('button[type="submit"]');
+
+    window.openAddRoomModal = function() {
+      if (!roomForm) return;
+      roomForm.reset();
+      roomIdInput.value = '';
+      roomModalTitle.textContent = 'Tambah Ruang Sidang Baru';
+      roomModal.classList.remove('hidden');
+      roomModal.classList.add('flex');
+      roomNameInput.focus();
+    };
+
+    window.openEditRoomModal = async function(id) {
+      try {
+        const res = await fetch(`/api/rooms/${id}`);
+        const data = await res.json();
+        if (data.success && data.room) {
+          const r = data.room;
+          roomIdInput.value = r.id;
+          roomNameInput.value = r.room_name;
+          sessionTitleInput.value = r.session_title;
+          roomCapacityInput.value = r.capacity;
+          roomActiveInput.value = r.is_active;
+
+          roomModalTitle.textContent = 'Edit Ruang Sidang';
+          roomModal.classList.remove('hidden');
+          roomModal.classList.add('flex');
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') {
+          showToast('Gagal memuat data ruangan.', 'error');
+        } else {
+          alert('Gagal memuat data ruangan.');
+        }
+      }
+    };
+
+    window.closeRoomModal = function() {
+      roomModal.classList.add('hidden');
+      roomModal.classList.remove('flex');
+    };
+
+    roomForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = roomIdInput.value;
+      const isEdit = Boolean(id);
+      const url = isEdit ? `/api/rooms/${id}` : '/api/rooms';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...';
+      }
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room_name: roomNameInput.value.trim(),
+            session_title: sessionTitleInput.value.trim(),
+            capacity: Number(roomCapacityInput.value),
+            is_active: Number(roomActiveInput.value)
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          if (typeof showToast === 'function') {
+            showToast(data.message, 'success');
+          }
+          window.closeRoomModal();
+          setTimeout(() => window.location.reload(), 600);
+        } else {
+          if (typeof showToast === 'function') {
+            showToast(data.message || 'Gagal menyimpan ruangan.', 'error');
+          } else {
+            alert(data.message || 'Gagal menyimpan ruangan.');
+          }
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Simpan Ruangan';
+          }
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') {
+          showToast('Terjadi kesalahan komunikasi server.', 'error');
+        } else {
+          alert('Terjadi kesalahan komunikasi server.');
+        }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Simpan Ruangan';
+        }
+      }
+    });
+
+    window.deleteRoom = async function(id, name) {
+      if (!confirm(`Hapus ruangan "${name}"? Peserta yang dialokasikan ke ruangan ini akan menjadi tidak teralokasi.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/rooms/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          if (typeof showToast === 'function') {
+            showToast(data.message, 'success');
+          }
+          setTimeout(() => window.location.reload(), 600);
+        } else {
+          if (typeof showToast === 'function') {
+            showToast(data.message || 'Gagal menghapus ruangan.', 'error');
+          } else {
+            alert(data.message || 'Gagal menghapus ruangan.');
+          }
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') {
+          showToast('Gagal menghapus ruangan.', 'error');
+        }
+      }
+    };
+  });
+</script>
+
+<%- include('partials/footer') %>

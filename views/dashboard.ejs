@@ -1,0 +1,459 @@
+<%- include('partials/header') %>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <!-- Top Hero / Stats Overview -->
+  <div class="mb-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-black tracking-tight text-slate-900">
+          Dashboard Manajemen Peserta Sidang
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">
+          Kelola data peserta, alokasi ruangan sidang secara massal, cetak kartu tanda pengenal, dan pantau absensi.
+        </p>
+      </div>
+      <div class="flex items-center space-x-3">
+        <button 
+          onclick="openAddParticipantModal()"
+          class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-500/20 transition"
+        >
+          <i class="fas fa-user-plus mr-2"></i> Tambah Peserta
+        </button>
+        <a 
+          href="/print?ids=all" 
+          target="_blank"
+          class="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition"
+        >
+          <i class="fas fa-print mr-2 text-indigo-600"></i> Cetak Semua ID
+        </a>
+      </div>
+    </div>
+
+    <!-- Stat Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div class="glass-panel p-5 rounded-2xl shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Peserta</div>
+            <div class="text-2xl font-black text-slate-800 mt-1"><%= systemOverview.totalParticipants %></div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
+            <i class="fas fa-id-badge"></i>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 mt-3 flex items-center">
+          <span class="text-indigo-600 font-bold mr-1"><%= systemOverview.totalAllocated %></span> dialokasikan ke ruangan
+        </div>
+      </div>
+
+      <div class="glass-panel p-5 rounded-2xl shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Telah Hadir / Masuk</div>
+            <div class="text-2xl font-black text-emerald-600 mt-1"><%= systemOverview.totalAttended %></div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+            <i class="fas fa-user-check"></i>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 mt-3">
+          Verifikasi valid pintu sidang
+        </div>
+      </div>
+
+      <div class="glass-panel p-5 rounded-2xl shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Belum Ditugaskan</div>
+            <div class="text-2xl font-black text-amber-600 mt-1"><%= systemOverview.unallocated %></div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl">
+            <i class="fas fa-user-tag"></i>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 mt-3">
+          Perlu penugasan ruangan
+        </div>
+      </div>
+
+      <div class="glass-panel p-5 rounded-2xl shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruang Sidang Aktif</div>
+            <div class="text-2xl font-black text-violet-600 mt-1"><%= rooms.length %></div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl">
+            <i class="fas fa-door-open"></i>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 mt-3">
+          <a href="/rooms" class="text-indigo-600 hover:underline font-semibold">Kelola Ruangan &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search & Filter Controls -->
+  <div class="glass-panel p-4 rounded-2xl shadow-sm mb-6">
+    <form method="GET" action="/dashboard" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <!-- Search Input -->
+      <div class="md:col-span-2 relative">
+        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+          <i class="fas fa-search text-sm"></i>
+        </div>
+        <input 
+          type="text" 
+          name="search" 
+          value="<%= query.search %>"
+          placeholder="Cari Nama, NIM/NIK, atau Instansi..."
+          class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+        >
+      </div>
+
+      <!-- Room Filter -->
+      <div>
+        <select 
+          name="room" 
+          class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+        >
+          <option value="">Semua Ruangan Sidang</option>
+          <option value="unassigned" <%= query.room === 'unassigned' ? 'selected' : '' %>>-- Belum Dialokasikan --</option>
+          <% rooms.forEach(r => { %>
+            <option value="<%= r.id %>" <%= query.room == r.id ? 'selected' : '' %>>
+              <%= r.room_name %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <!-- Status Filter & Submit -->
+      <div class="flex items-center space-x-2">
+        <select 
+          name="status" 
+          class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+        >
+          <option value="">Status Kehadiran</option>
+          <option value="attended" <%= query.status === 'attended' ? 'selected' : '' %>>Sudah Hadir</option>
+          <option value="not_attended" <%= query.status === 'not_attended' ? 'selected' : '' %>>Belum Hadir</option>
+        </select>
+
+        <button 
+          type="submit" 
+          class="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold transition"
+          title="Filter Data"
+        >
+          <i class="fas fa-filter"></i>
+        </button>
+
+        <% if (query.search || query.room || query.status) { %>
+          <a 
+            href="/dashboard" 
+            class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm transition"
+            title="Reset Filter"
+          >
+            <i class="fas fa-undo"></i>
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+
+  <!-- Participants Table Card -->
+  <div class="glass-panel rounded-2xl shadow-sm overflow-hidden border border-slate-200">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-100/80 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
+          <tr>
+            <th scope="col" class="py-4 px-4 w-12 text-center">
+              <input 
+                type="checkbox" 
+                id="select-all-participants" 
+                class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                title="Pilih Semua di Halaman Ini"
+              >
+            </th>
+            <th scope="col" class="py-4 px-4">Nama Peserta</th>
+            <th scope="col" class="py-4 px-4">NIM / NIK</th>
+            <th scope="col" class="py-4 px-4">Instansi / Delegasi</th>
+            <th scope="col" class="py-4 px-4">Ruangan Sidang Dialokasikan</th>
+            <th scope="col" class="py-4 px-4 text-center">Status Absensi</th>
+            <th scope="col" class="py-4 px-4 text-right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200/80 bg-white" id="participants-table-body">
+          <% if (participants && participants.length > 0) { %>
+            <% participants.forEach(p => { %>
+              <tr class="hover:bg-slate-50/80 transition-colors duration-150 participant-row" data-id="<%= p.id %>">
+                <!-- Checkbox -->
+                <td class="py-4 px-4 text-center">
+                  <input 
+                    type="checkbox" 
+                    value="<%= p.id %>"
+                    class="participant-checkbox w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  >
+                </td>
+
+                <!-- Name & Token snippet -->
+                <td class="py-4 px-4">
+                  <div class="font-bold text-slate-900"><%= p.name %></div>
+                  <div class="text-[11px] font-mono text-slate-400 mt-0.5 flex items-center">
+                    <i class="fas fa-qrcode mr-1 text-slate-300"></i>
+                    QR: <span class="text-slate-500 ml-1"><%= p.qr_token.slice(0, 8) %>...</span>
+                  </div>
+                </td>
+
+                <!-- Identifier -->
+                <td class="py-4 px-4 font-mono font-medium text-slate-700">
+                  <%= p.identifier_num %>
+                </td>
+
+                <!-- Institution -->
+                <td class="py-4 px-4 text-slate-600">
+                  <%= p.institution || '<span class="text-slate-400 italic">-</span>' %>
+                </td>
+
+                <!-- Room Allocation -->
+                <td class="py-4 px-4">
+                  <% if (p.room_name) { %>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <i class="fas fa-door-open mr-1.5 text-indigo-500"></i>
+                      <%= p.room_name %>
+                    </span>
+                    <div class="text-[11px] text-slate-400 mt-0.5"><%= p.session_title %></div>
+                  <% } else { %>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                      <i class="fas fa-exclamation-circle mr-1.5 text-amber-500"></i>
+                      Belum Ditugaskan
+                    </span>
+                  <% } %>
+                </td>
+
+                <!-- Attendance Status -->
+                <td class="py-4 px-4 text-center">
+                  <% if (p.is_attended) { %>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                      <i class="fas fa-check-circle mr-1"></i> Hadir
+                    </span>
+                    <div class="text-[11px] text-slate-400 font-mono mt-1">
+                      <%= p.attended_at ? p.attended_at.slice(11, 16) : '' %>
+                    </div>
+                  <% } else { %>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                      <i class="fas fa-clock mr-1 text-slate-400"></i> Belum Hadir
+                    </span>
+                  <% } %>
+                </td>
+
+                <!-- Actions -->
+                <td class="py-4 px-4 text-right">
+                  <div class="inline-flex items-center space-x-1">
+                    <!-- Print ID Card -->
+                    <a 
+                      href="/print?id=<%= p.id %>" 
+                      target="_blank"
+                      class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      title="Cetak ID Card Peserta Ini"
+                    >
+                      <i class="fas fa-print"></i>
+                    </a>
+
+                    <!-- Edit Participant -->
+                    <button 
+                      onclick="openEditParticipantModal(<%= p.id %>)"
+                      class="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                      title="Edit Data"
+                    >
+                      <i class="fas fa-pencil-alt"></i>
+                    </button>
+
+                    <!-- Reset Attendance -->
+                    <% if (p.is_attended) { %>
+                    <button 
+                      onclick="resetAttendance(<%= p.id %>, '<%= p.name %>')"
+                      class="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                      title="Reset Absensi (Ulangi Scan)"
+                    >
+                      <i class="fas fa-history"></i>
+                    </button>
+                    <% } %>
+
+                    <!-- Delete -->
+                    <button 
+                      onclick="deleteParticipant(<%= p.id %>, '<%= p.name %>')"
+                      class="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      title="Hapus Peserta"
+                    >
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-12 text-center text-slate-400">
+                <i class="fas fa-users-slash text-4xl mb-3 text-slate-300 block"></i>
+                <p class="font-medium">Tidak ada data peserta yang sesuai dengan filter.</p>
+                <p class="text-xs mt-1">Gunakan tombol "Tambah Peserta" untuk menambahkan data baru.</p>
+              </td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    <% if (totalPages > 1) { %>
+    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+      <div class="text-xs text-slate-500">
+        Menampilkan halaman <b><%= page %></b> dari <b><%= totalPages %></b> (Total <%= total %> data)
+      </div>
+      <div class="flex items-center space-x-1">
+        <% if (page > 1) { %>
+          <a href="/dashboard?page=<%= page - 1 %>&search=<%= query.search %>&room=<%= query.room %>&status=<%= query.status %>" class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700">
+            &larr; Sebelumnya
+          </a>
+        <% } %>
+        <% for (let i = 1; i <= totalPages; i++) { %>
+          <a href="/dashboard?page=<%= i %>&search=<%= query.search %>&room=<%= query.room %>&status=<%= query.status %>" class="px-3 py-1.5 rounded-lg text-xs font-semibold <%= page === i ? 'bg-indigo-600 text-white' : 'bg-white border text-slate-700 hover:bg-slate-50' %>">
+            <%= i %>
+          </a>
+        <% } %>
+        <% if (page < totalPages) { %>
+          <a href="/dashboard?page=<%= page + 1 %>&search=<%= query.search %>&room=<%= query.room %>&status=<%= query.status %>" class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700">
+            Selanjutnya &rarr;
+          </a>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+  </div>
+
+</div>
+
+<!-- Floating Bulk Action Toolbar -->
+<div id="floating-bulk-toolbar" class="floating-toolbar fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 bg-slate-900/95 text-white backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700 px-6 py-3.5 flex items-center space-x-4">
+  <div class="flex items-center space-x-2 pr-4 border-r border-slate-700">
+    <span class="w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-black flex items-center justify-center" id="selected-count">0</span>
+    <span class="text-xs font-semibold text-slate-300">Peserta Terpilih</span>
+  </div>
+
+  <!-- Bulk Room Selector -->
+  <div class="flex items-center space-x-2">
+    <select id="bulk-room-select" class="px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <option value="">-- Pilih Ruang Sidang --</option>
+      <% rooms.forEach(r => { %>
+        <option value="<%= r.id %>"><%= r.room_name %></option>
+      <% }) %>
+    </select>
+
+    <button 
+      id="btn-bulk-assign" 
+      class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center"
+    >
+      <i class="fas fa-check-double mr-1.5"></i> Tugaskan ke Ruangan
+    </button>
+  </div>
+
+  <!-- Bulk Print Button -->
+  <div class="pl-4 border-l border-slate-700">
+    <button 
+      id="btn-bulk-print" 
+      class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center"
+    >
+      <i class="fas fa-print mr-1.5"></i> Cetak ID Card Terpilih
+    </button>
+  </div>
+</div>
+
+<!-- Add / Edit Participant Modal -->
+<div id="participant-modal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+    <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+      <h3 class="text-lg font-bold text-slate-900" id="modal-title">Tambah Peserta Baru</h3>
+      <button onclick="closeParticipantModal()" class="text-slate-400 hover:text-slate-600">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+
+    <form id="participant-form" class="space-y-4 mt-5">
+      <input type="hidden" id="p-id">
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Nama Lengkap Peserta <span class="text-rose-500">*</span>
+        </label>
+        <input 
+          type="text" 
+          id="p-name" 
+          required 
+          placeholder="Contoh: Dr. Muhammad Ilham, M.Si"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Nomor Identitas (NIM / NIK) <span class="text-rose-500">*</span>
+        </label>
+        <input 
+          type="text" 
+          id="p-identifier" 
+          required 
+          placeholder="Contoh: NIM.20230114098 atau NIK.3273..."
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+        <p class="text-[11px] text-slate-400 mt-1">Harus unik, sistem otomatis menolak jika nomor sudah terdaftar.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Instansi / Delegasi / Jurusan
+        </label>
+        <input 
+          type="text" 
+          id="p-institution" 
+          placeholder="Contoh: Pengurus Wilayah Jawa Barat / Delegasi Kampus"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Alokasi Ruangan Sidang
+        </label>
+        <select 
+          id="p-room" 
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+        >
+          <option value="">-- Belum Ditugaskan / Tugaskan Nanti --</option>
+          <% rooms.forEach(r => { %>
+            <option value="<%= r.id %>"><%= r.room_name %> (<%= r.session_title %>)</option>
+          <% }) %>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">Sistem otomatis menghasilkan QR token (UUID v4) saat peserta disimpan.</p>
+      </div>
+
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+        <button 
+          type="button" 
+          onclick="closeParticipantModal()"
+          class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+        >
+          Batal
+        </button>
+        <button 
+          type="submit" 
+          class="px-5 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition"
+        >
+          Simpan Data Peserta
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/dashboard.js"></script>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,303 @@
+<%- include('partials/header') %>
+
+<!-- html5-qrcode CDN -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<div class="max-w-4xl mx-auto px-4 py-4">
+
+  <!-- Top Navigation & Room Selector -->
+  <div class="glass-panel rounded-2xl p-4 shadow-sm border border-slate-200 mb-4">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-base shadow-md">
+          <i class="fas fa-camera"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-black text-slate-900 leading-tight">
+            Kamera Pemindai Pintu Sidang
+          </h1>
+          <p class="text-[11px] text-slate-500">
+            Khusus HP/Tablet petugas pintu. Hasil langsung tampil di layar monitor panitia.
+          </p>
+        </div>
+      </div>
+
+      <!-- Room Selector & Switch to Display Link -->
+      <div class="flex items-center space-x-2">
+        <select 
+          id="cam-room-select" 
+          class="px-3 py-2 bg-white border-2 border-indigo-500 text-slate-900 font-bold rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+        >
+          <% rooms.forEach(r => { %>
+            <option value="<%= r.id %>" <%= selectedRoomId === r.id ? 'selected' : '' %>>
+              <%= r.room_name %>
+            </option>
+          <% }) %>
+        </select>
+
+        <a 
+          href="/scanner?room_id=<%= selectedRoomId %>" 
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition flex items-center whitespace-nowrap"
+          title="Buka Layar Monitor Display & Tabel Riwayat"
+        >
+          <i class="fas fa-desktop mr-1.5"></i>
+          <span>Layar Monitor</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Camera Stage (Full Viewport on Mobile) -->
+  <div class="glass-panel rounded-2xl shadow-xl border border-slate-300 overflow-hidden bg-black text-white relative">
+    
+    <!-- Camera Viewport Container -->
+    <div class="relative w-full aspect-[4/3] sm:aspect-video bg-black flex items-center justify-center overflow-hidden">
+      
+      <div id="cam-reader-viewport" class="w-full h-full object-cover">
+        <div class="h-full flex flex-col items-center justify-center p-6 text-slate-400 text-center">
+          <i class="fas fa-video-slash text-4xl mb-3 text-slate-600"></i>
+          <p class="text-sm font-bold text-slate-300">Kamera Belum Aktif</p>
+          <p class="text-xs text-slate-500 mt-1 max-w-xs">Klik tombol "Nyalakan Kamera HP" di bawah untuk mulai memindai kartu peserta di depan pintu.</p>
+        </div>
+      </div>
+
+      <!-- Viewfinder Overlay -->
+      <div id="cam-overlay-box" class="hidden qr-viewfinder"></div>
+      <div id="cam-scan-line" class="hidden scan-line"></div>
+
+      <!-- Transient Feedback Overlay Badge -->
+      <div id="cam-feedback-badge" class="absolute inset-x-4 top-4 pointer-events-none transition-all duration-300 transform -translate-y-6 opacity-0 z-30">
+      </div>
+
+    </div>
+
+    <!-- Camera Controls Bar -->
+    <div class="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-center space-x-3">
+      <button 
+        id="btn-start-hp-cam" 
+        class="flex-1 max-w-xs py-3 px-5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center space-x-2"
+      >
+        <i class="fas fa-video text-base"></i>
+        <span>Nyalakan Kamera HP</span>
+      </button>
+
+      <button 
+        id="btn-stop-hp-cam" 
+        class="hidden flex-1 max-w-xs py-3 px-5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center space-x-2"
+      >
+        <i class="fas fa-stop text-base"></i>
+        <span>Matikan Kamera</span>
+      </button>
+
+      <button 
+        id="btn-switch-hp-cam" 
+        class="hidden py-3 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-xl text-sm font-semibold transition"
+        title="Tukar Kamera Depan / Belakang"
+      >
+        <i class="fas fa-sync-alt text-base"></i>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Guard Instructions Card -->
+  <div class="mt-4 p-4 rounded-xl bg-indigo-50/80 border border-indigo-100 text-xs text-indigo-900 flex items-start space-x-3">
+    <i class="fas fa-info-circle text-indigo-600 text-base flex-shrink-0 mt-0.5"></i>
+    <div class="leading-relaxed">
+      <b>Petunjuk Petugas Pintu:</b> Arahkan kamera HP ke QR Code kartu peserta. Data kehadiran akan otomatis terverifikasi dan <b>langsung terpampang di layar monitor/display laptop panitia di ruangan secara realtime</b>. HP Anda siap memindai peserta berikutnya tanpa delay.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const roomSelect = document.getElementById('cam-room-select');
+    const btnStart = document.getElementById('btn-start-hp-cam');
+    const btnStop = document.getElementById('btn-stop-hp-cam');
+    const btnSwitch = document.getElementById('btn-switch-hp-cam');
+    const overlayBox = document.getElementById('cam-overlay-box');
+    const scanLine = document.getElementById('cam-scan-line');
+    const feedbackBadge = document.getElementById('cam-feedback-badge');
+
+    let html5QrCode = null;
+    let isScanning = false;
+    let currentFacing = 'environment';
+    let isProcessing = false;
+    let lastToken = '';
+    let lastTime = 0;
+
+    roomSelect?.addEventListener('change', (e) => {
+      window.location.href = `/scanner/camera?room_id=${e.target.value}`;
+    });
+
+    async function startCamera() {
+      if (typeof Html5Qrcode === 'undefined') {
+        showToast('Pustaka pemindai belum siap.', 'error');
+        return;
+      }
+
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode('cam-reader-viewport');
+      }
+
+      const config = {
+        fps: 20,
+        qrbox: { width: 260, height: 260 },
+        aspectRatio: 1.333333
+      };
+
+      try {
+        await html5QrCode.start(
+          { facingMode: currentFacing },
+          config,
+          (decodedText) => {
+            handleScan(decodedText);
+          },
+          () => {}
+        );
+
+        isScanning = true;
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        btnSwitch.classList.remove('hidden');
+        overlayBox.classList.remove('hidden');
+        scanLine.classList.remove('hidden');
+        showToast('Kamera HP aktif. Siap memindai kartu.', 'success');
+      } catch (err) {
+        console.error('Camera error:', err);
+        showToast('Gagal membuka kamera: ' + (err.message || err), 'error');
+      }
+    }
+
+    async function stopCamera() {
+      if (html5QrCode && isScanning) {
+        try {
+          await html5QrCode.stop();
+        } catch (e) {
+          console.error(e);
+        }
+        isScanning = false;
+        btnStart.classList.remove('hidden');
+        btnStop.classList.add('hidden');
+        btnSwitch.classList.add('hidden');
+        overlayBox.classList.add('hidden');
+        scanLine.classList.add('hidden');
+      }
+    }
+
+    async function switchCamera() {
+      await stopCamera();
+      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+      await startCamera();
+    }
+
+    btnStart?.addEventListener('click', startCamera);
+    btnStop?.addEventListener('click', stopCamera);
+    btnSwitch?.addEventListener('click', switchCamera);
+
+    async function handleScan(token) {
+      const now = Date.now();
+      if (token === lastToken && (now - lastTime) < 2500) {
+        return;
+      }
+
+      if (isProcessing) return;
+      isProcessing = true;
+      lastToken = token;
+      lastTime = now;
+
+      const roomId = roomSelect.value;
+
+      try {
+        const res = await fetch('/api/verify/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qr_token: token, room_id: Number(roomId) })
+        });
+        const data = await res.json();
+
+        // Haptic feedback & audio on mobile device
+        if (navigator.vibrate) {
+          if (data.status === 'SUCCESS') {
+            navigator.vibrate([80, 50, 80]);
+          } else {
+            navigator.vibrate(200);
+          }
+        }
+
+        if (window.scannerAudio) {
+          if (data.status === 'SUCCESS') window.scannerAudio.playSuccess();
+          else if (data.status === 'ALREADY_ATTENDED') window.scannerAudio.playWarning();
+          else window.scannerAudio.playError();
+        }
+
+        showTransientFeedback(data);
+      } catch (err) {
+        console.error('Scan request error:', err);
+      } finally {
+        setTimeout(() => {
+          isProcessing = false;
+        }, 800);
+      }
+    }
+
+    function showTransientFeedback(data) {
+      if (!feedbackBadge) return;
+
+      if (data.status === 'SUCCESS') {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-emerald-400">
+            <div class="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center font-bold text-sm">
+              <i class="fas fa-check"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-emerald-200">Akses Diterima</div>
+              <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+            </div>
+          </div>
+        `;
+      } else if (data.status === 'WRONG_ROOM') {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-rose-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-400">
+            <div class="w-8 h-8 rounded-full bg-white text-rose-700 flex items-center justify-center font-bold text-sm">
+              <i class="fas fa-door-closed"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-rose-200">Salah Ruangan!</div>
+              <div class="text-xs font-extrabold truncate">Ke: ${data.participant?.correct_room || 'Ruangan Lain'}</div>
+            </div>
+          </div>
+        `;
+      } else if (data.status === 'ALREADY_ATTENDED') {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-amber-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-400">
+            <div class="w-8 h-8 rounded-full bg-white text-amber-700 flex items-center justify-center font-bold text-sm">
+              <i class="fas fa-history"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Sudah Masuk!</div>
+              <div class="text-xs font-bold truncate">${data.participant?.name || 'Peserta'}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-rose-700 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-500">
+            <i class="fas fa-times-circle text-xl text-white"></i>
+            <div class="text-xs font-bold">QR Code Tidak Terdaftar</div>
+          </div>
+        `;
+      }
+
+      feedbackBadge.classList.remove('-translate-y-6', 'opacity-0');
+      setTimeout(() => {
+        feedbackBadge.classList.add('-translate-y-6', 'opacity-0');
+      }, 2500);
+    }
+  });
+</script>
+
+<%- include('partials/footer') %>
