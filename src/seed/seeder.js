@@ -2,11 +2,13 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { db, initializeDatabase } = require('../config/database');
 
-async function runSeeder() {
+async function runSeeder({ ensureTables = true } = {}) {
   console.log('--- Memulai Database Seeding MUSPIMNAS ---');
 
-  // Ensure tables exist
-  await initializeDatabase();
+  // Ensure tables exist if called standalone
+  if (ensureTables) {
+    await initializeDatabase();
+  }
 
   // 1. Seed Default Admin
   const adminUsername = 'admin';

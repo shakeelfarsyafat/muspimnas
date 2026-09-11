@@ -193,7 +193,7 @@ async function initializeDatabase() {
     if (!adminCheck || Number(adminCheck.count) === 0) {
       console.log('[Database] Database baru terdeteksi. Menjalankan auto-seeding data awal...');
       const runSeeder = require('../seed/seeder');
-      await runSeeder();
+      await runSeeder({ ensureTables: false });
     }
   } catch (err) {
     console.error('[Database] Check admin table error:', err);

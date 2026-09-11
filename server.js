@@ -4,11 +4,34 @@ const session = require('express-session');
 const path = require('path');
 const { initializeDatabase } = require('./src/config/database');
 
-// Initialize database schema
-initializeDatabase();
-
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Ensure database schema and seeding are complete before handling requests
+let dbInitPromise = null;
+function ensureDbReady() {
+  if (!dbInitPromise) {
+    dbInitPromise = initializeDatabase().catch(err => {
+      console.error('[Server] Critical DB Init Error:', err);
+      dbInitPromise = null; // allow retry
+      throw err;
+    });
+  }
+  return dbInitPromise;
+}
+
+app.use(async (req, res, next) => {
+  // Static assets don't require database
+  if (req.path.startsWith('/css') || req.path.startsWith('/js') || req.path.startsWith('/images')) {
+    return next();
+  }
+  try {
+    await ensureDbReady();
+    next();
+  } catch (err) {
+    res.status(500).send('Database Initialization Error: ' + err.message);
+  }
+});
 
 // Body Parsers
 app.use(express.urlencoded({ extended: true }));
