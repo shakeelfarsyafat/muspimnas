@@ -22,7 +22,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const cleanUsername = username.trim();
-    let admin = await db.get('SELECT * FROM admins WHERE username = ?', [cleanUsername]);
+    let admin = await db.get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?)', [cleanUsername]);
     
     // Self-healing: if admin account doesn't exist yet, auto-provision default admin
     if (!admin && cleanUsername.toLowerCase() === 'admin' && password === 'admin123') {
