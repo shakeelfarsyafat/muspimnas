@@ -115,6 +115,7 @@ const participantService = {
         ra.room_id,
         ra.is_attended,
         ra.attended_at,
+        ra.left_at,
         cr.room_name,
         cr.session_title
       FROM participants p
@@ -134,6 +135,7 @@ const participantService = {
         ra.room_id,
         ra.is_attended,
         ra.attended_at,
+        ra.left_at,
         cr.room_name,
         cr.session_title
       FROM participants p
@@ -167,7 +169,9 @@ const participantService = {
 
     if (attendanceStatus !== '') {
       if (attendanceStatus === 'attended') {
-        conditions.push('ra.is_attended = 1');
+        conditions.push('ra.is_attended = 1 AND ra.left_at IS NULL');
+      } else if (attendanceStatus === 'left') {
+        conditions.push('ra.left_at IS NOT NULL');
       } else if (attendanceStatus === 'not_attended') {
         conditions.push('(ra.is_attended = 0 OR ra.is_attended IS NULL)');
       }
@@ -198,6 +202,7 @@ const participantService = {
         ra.room_id,
         ra.is_attended,
         ra.attended_at,
+        ra.left_at,
         cr.room_name,
         cr.session_title
       FROM participants p

@@ -66,7 +66,7 @@ router.get('/scanner/camera', (req, res) => {
 // POST /api/verify/scan - Core scan verification API
 router.post('/api/verify/scan', (req, res) => {
   try {
-    const { qr_token, room_id } = req.body;
+    const { qr_token, room_id, mode = 'in' } = req.body;
 
     if (!qr_token) {
       return res.status(400).json({
@@ -84,7 +84,7 @@ router.post('/api/verify/scan', (req, res) => {
       });
     }
 
-    const result = verificationService.verifyScan(qr_token, room_id);
+    const result = verificationService.verifyScan(qr_token, room_id, mode);
     const roomStats = roomService.getRoomStats(room_id);
 
     const responseData = {

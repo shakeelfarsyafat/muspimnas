@@ -49,6 +49,26 @@
     </div>
   </div>
 
+  <!-- Scan Mode Toggle (Presensi Masuk vs Presensi Keluar) -->
+  <div class="mb-3 flex items-center justify-center p-1 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg max-w-sm mx-auto">
+    <button 
+      id="mode-btn-in" 
+      type="button" 
+      class="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+    >
+      <i class="fas fa-sign-in-alt"></i>
+      <span>Presensi Masuk</span>
+    </button>
+    <button 
+      id="mode-btn-out" 
+      type="button" 
+      class="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 text-slate-400 hover:text-slate-200"
+    >
+      <i class="fas fa-sign-out-alt"></i>
+      <span>Presensi Keluar</span>
+    </button>
+  </div>
+
   <!-- Camera Stage (Full Viewport on Mobile) -->
   <div class="glass-panel rounded-2xl shadow-xl border border-slate-300 overflow-hidden bg-black text-white relative">
     
@@ -106,7 +126,7 @@
   <div class="mt-4 p-4 rounded-xl bg-indigo-50/80 border border-indigo-100 text-xs text-indigo-900 flex items-start space-x-3">
     <i class="fas fa-info-circle text-indigo-600 text-base flex-shrink-0 mt-0.5"></i>
     <div class="leading-relaxed">
-      <b>Petunjuk Petugas Pintu:</b> Arahkan kamera HP ke QR Code kartu peserta. Data kehadiran akan otomatis terverifikasi dan <b>langsung terpampang di layar monitor/display laptop panitia di ruangan secara realtime</b>. HP Anda siap memindai peserta berikutnya tanpa delay.
+      <b>Petunjuk Petugas Pintu:</b> Pilih mode <b>Presensi Masuk</b> saat peserta memasuki ruangan sidang, atau pilih <b>Presensi Keluar</b> saat peserta izin keluar/selesai. Seluruh data presensi otomatis tersimpan dan <b>langsung terpampang di monitor laptop secara realtime</b>.
     </div>
   </div>
 
@@ -121,13 +141,32 @@
     const overlayBox = document.getElementById('cam-overlay-box');
     const scanLine = document.getElementById('cam-scan-line');
     const feedbackBadge = document.getElementById('cam-feedback-badge');
+    const modeBtnIn = document.getElementById('mode-btn-in');
+    const modeBtnOut = document.getElementById('mode-btn-out');
 
+    let currentMode = 'in'; // 'in' or 'out'
     let html5QrCode = null;
     let isScanning = false;
     let currentFacing = 'environment';
     let isProcessing = false;
     let lastToken = '';
     let lastTime = 0;
+
+    function setScanMode(mode) {
+      currentMode = mode;
+      if (mode === 'in') {
+        modeBtnIn.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-emerald-600 text-white shadow-md shadow-emerald-600/30';
+        modeBtnOut.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 text-slate-400 hover:text-slate-200';
+        showToast('Mode diubah: Presensi Masuk (Hadir)', 'success');
+      } else {
+        modeBtnOut.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-rose-600 text-white shadow-md shadow-rose-600/30';
+        modeBtnIn.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 text-slate-400 hover:text-slate-200';
+        showToast('Mode diubah: Presensi Keluar', 'warning');
+      }
+    }
+
+    modeBtnIn?.addEventListener('click', () => setScanMode('in'));
+    modeBtnOut?.addEventListener('click', () => setScanMode('out'));
 
     roomSelect?.addEventListener('change', (e) => {
       window.location.href = `/scanner/camera?room_id=${e.target.value}`;
@@ -215,13 +254,13 @@
         const res = await fetch('/api/verify/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qr_token: token, room_id: Number(roomId) })
+          body: JSON.stringify({ qr_token: token, room_id: Number(roomId), mode: currentMode })
         });
         const data = await res.json();
 
         // Haptic feedback & audio on mobile device
         if (navigator.vibrate) {
-          if (data.status === 'SUCCESS') {
+          if (data.status === 'SUCCESS' || data.status === 'SUCCESS_OUT' || data.status === 'SUCCESS_REENTRY') {
             navigator.vibrate([80, 50, 80]);
           } else {
             navigator.vibrate(200);
@@ -229,9 +268,13 @@
         }
 
         if (window.scannerAudio) {
-          if (data.status === 'SUCCESS') window.scannerAudio.playSuccess();
-          else if (data.status === 'ALREADY_ATTENDED') window.scannerAudio.playWarning();
-          else window.scannerAudio.playError();
+          if (data.status === 'SUCCESS' || data.status === 'SUCCESS_OUT' || data.status === 'SUCCESS_REENTRY') {
+            window.scannerAudio.playSuccess();
+          } else if (data.status === 'ALREADY_ATTENDED' || data.status === 'ALREADY_LEFT') {
+            window.scannerAudio.playWarning();
+          } else {
+            window.scannerAudio.playError();
+          }
         }
 
         showTransientFeedback(data);
@@ -247,14 +290,28 @@
     function showTransientFeedback(data) {
       if (!feedbackBadge) return;
 
-      if (data.status === 'SUCCESS') {
+      if (data.status === 'SUCCESS' || data.status === 'SUCCESS_REENTRY') {
         feedbackBadge.innerHTML = `
           <div class="px-4 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-emerald-400">
             <div class="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center font-bold text-sm">
               <i class="fas fa-check"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-emerald-200">Akses Diterima</div>
+              <div class="text-[10px] uppercase font-bold tracking-wider text-emerald-200">
+                ${data.status === 'SUCCESS_REENTRY' ? 'Masuk Kembali' : 'Presensi Masuk Diterima'}
+              </div>
+              <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+            </div>
+          </div>
+        `;
+      } else if (data.status === 'SUCCESS_OUT') {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-amber-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-400">
+            <div class="w-8 h-8 rounded-full bg-white text-amber-700 flex items-center justify-center font-bold text-sm">
+              <i class="fas fa-sign-out-alt"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Presensi Keluar Berhasil</div>
               <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
             </div>
           </div>
@@ -273,21 +330,28 @@
         `;
       } else if (data.status === 'ALREADY_ATTENDED') {
         feedbackBadge.innerHTML = `
-          <div class="px-4 py-3 bg-amber-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-400">
-            <div class="w-8 h-8 rounded-full bg-white text-amber-700 flex items-center justify-center font-bold text-sm">
-              <i class="fas fa-history"></i>
+          <div class="px-4 py-3 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-indigo-400">
+            <div class="w-8 h-8 rounded-full bg-white text-indigo-700 flex items-center justify-center font-bold text-sm">
+              <i class="fas fa-user-check"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Sudah Masuk!</div>
+              <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-200">Sudah Di Dalam Ruangan</div>
               <div class="text-xs font-bold truncate">${data.participant?.name || 'Peserta'}</div>
             </div>
+          </div>
+        `;
+      } else if (data.status === 'ALREADY_LEFT' || data.status === 'NOT_ATTENDED') {
+        feedbackBadge.innerHTML = `
+          <div class="px-4 py-3 bg-amber-700 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-amber-500">
+            <i class="fas fa-exclamation-triangle text-xl text-white"></i>
+            <div class="flex-1 text-xs font-bold">${data.message}</div>
           </div>
         `;
       } else {
         feedbackBadge.innerHTML = `
           <div class="px-4 py-3 bg-rose-700 text-white rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-500">
             <i class="fas fa-times-circle text-xl text-white"></i>
-            <div class="text-xs font-bold">QR Code Tidak Terdaftar</div>
+            <div class="text-xs font-bold">${data.message || 'QR Code Tidak Terdaftar'}</div>
           </div>
         `;
       }

@@ -134,9 +134,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleIncomingScanEvent(data) {
     // 1. Audio feedback on monitor's speakers
     if (window.scannerAudio) {
-      if (data.status === 'SUCCESS') {
+      if (data.status === 'SUCCESS' || data.status === 'SUCCESS_OUT' || data.status === 'SUCCESS_REENTRY') {
         window.scannerAudio.playSuccess();
-      } else if (data.status === 'ALREADY_ATTENDED') {
+      } else if (data.status === 'ALREADY_ATTENDED' || data.status === 'ALREADY_LEFT') {
         window.scannerAudio.playWarning();
       } else {
         window.scannerAudio.playError();
@@ -148,13 +148,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Update room metrics
     if (data.roomStats) {
-      if (roomAttendedCount) roomAttendedCount.textContent = data.roomStats.attended;
-      if (roomUnattendedCount) roomUnattendedCount.textContent = data.roomStats.unattended !== undefined ? data.roomStats.unattended : Math.max(0, data.roomStats.allocated - data.roomStats.attended);
+      const insideCount = data.roomStats.inside !== undefined ? data.roomStats.inside : data.roomStats.attended;
+      const exitedCount = data.roomStats.exited !== undefined ? data.roomStats.exited : 0;
+      const unattendedCount = data.roomStats.unattended !== undefined ? data.roomStats.unattended : Math.max(0, data.roomStats.allocated - data.roomStats.attended);
+
+      if (roomAttendedCount) roomAttendedCount.textContent = insideCount;
+      const roomExitedElem = document.getElementById('stat-room-exited');
+      if (roomExitedElem) roomExitedElem.textContent = exitedCount;
+      if (roomUnattendedCount) roomUnattendedCount.textContent = unattendedCount;
     }
 
-    // 4. Prepend row to Database Table if SUCCESS
-    if (data.status === 'SUCCESS' && data.participant) {
-      prependLiveTableRow(data.participant);
+    // 4. Prepend row to Database Table if SUCCESS or SUCCESS_OUT or SUCCESS_REENTRY
+    if ((data.status === 'SUCCESS' || data.status === 'SUCCESS_OUT' || data.status === 'SUCCESS_REENTRY') && data.participant) {
+      prependLiveTableRow(data.participant, data.status === 'SUCCESS_OUT' ? 'KELUAR' : 'MASUK');
     }
   }
 
@@ -164,8 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderScanResult(data) {
     if (!scanResultCard) return;
 
-    if (data.status === 'SUCCESS') {
+    if (data.status === 'SUCCESS' || data.status === 'SUCCESS_REENTRY') {
       const p = data.participant;
+      const isReentry = data.status === 'SUCCESS_REENTRY';
       scanResultCard.className = 'glass-panel rounded-xl px-5 py-3 border-2 border-emerald-500 bg-emerald-50/70 shadow-lg pulse-success transition-all duration-300';
       scanResultCard.innerHTML = `
         <div class="flex items-center justify-between flex-wrap gap-2">
@@ -176,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
               <div class="flex items-center space-x-2">
                 <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-600 text-white uppercase tracking-wider">
-                  AKSES DITERIMA
+                  ${isReentry ? 'MASUK KEMBALI' : 'AKSES MASUK DITERIMA'}
                 </span>
                 <span class="text-xs font-mono font-bold text-slate-500">${escapeHtml(p.identifier_num)}</span>
               </div>
@@ -188,6 +195,34 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="text-right">
             <span class="inline-block px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-mono font-bold text-xs">
               <i class="fas fa-clock mr-1 text-[10px]"></i> ${p.attended_at ? p.attended_at.slice(11, 19) : 'Baru Saja'}
+            </span>
+          </div>
+        </div>
+      `;
+    } else if (data.status === 'SUCCESS_OUT') {
+      const p = data.participant;
+      scanResultCard.className = 'glass-panel rounded-xl px-5 py-3 border-2 border-amber-500 bg-amber-50/80 shadow-lg pulse-success transition-all duration-300';
+      scanResultCard.innerHTML = `
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center text-xl shadow-md flex-shrink-0">
+              <i class="fas fa-sign-out-alt"></i>
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-600 text-white uppercase tracking-wider">
+                  PRESENSI KELUAR BERHASIL
+                </span>
+                <span class="text-xs font-mono font-bold text-slate-500">${escapeHtml(p.identifier_num)}</span>
+              </div>
+              <h2 class="text-lg font-black text-slate-900 leading-tight mt-0.5">${escapeHtml(p.name)}</h2>
+              <div class="text-[11px] text-slate-600 font-medium">${escapeHtml(p.institution || '-')} &bull; <span class="text-amber-800 font-semibold">${escapeHtml(p.room_name)}</span></div>
+            </div>
+          </div>
+
+          <div class="text-right">
+            <span class="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 font-mono font-bold text-xs">
+              <i class="fas fa-clock mr-1 text-[10px]"></i> Keluar: ${p.left_at ? p.left_at.slice(11, 19) : 'Baru Saja'}
             </span>
           </div>
         </div>
@@ -253,30 +288,38 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Prepend New Scan Row into Live Database Table
    */
-  function prependLiveTableRow(p) {
+  function prependLiveTableRow(p, action = 'MASUK') {
     if (!liveScansTableBody || !p) return;
 
     const emptyRow = document.getElementById('empty-history-row');
     if (emptyRow) emptyRow.remove();
 
-    const timeStr = p.attended_at 
-      ? (p.attended_at.includes(' ') ? p.attended_at.split(' ')[1] : p.attended_at)
+    const isExit = action === 'KELUAR';
+    const rawTime = isExit ? (p.left_at || p.attended_at) : (p.attended_at || p.left_at);
+    const timeStr = rawTime 
+      ? (rawTime.includes(' ') ? rawTime.split(' ')[1] : rawTime)
       : new Date().toLocaleTimeString('id-ID');
 
     const row = document.createElement('tr');
     row.className = 'table-row-new hover:bg-slate-50/90 transition text-xs';
     row.innerHTML = `
-      <td class="py-2 px-3 text-center font-mono text-emerald-600 font-bold text-[11px]">1</td>
+      <td class="py-2 px-3 text-center font-mono ${isExit ? 'text-amber-600' : 'text-emerald-600'} font-bold text-[11px]">1</td>
       <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px]">
-        <i class="fas fa-clock text-emerald-600 mr-1 text-[9px]"></i> ${timeStr}
+        <i class="fas fa-clock ${isExit ? 'text-amber-500' : 'text-emerald-500'} mr-1 text-[9px]"></i> ${timeStr}
       </td>
       <td class="py-2 px-3 font-bold text-slate-900">${escapeHtml(p.name)}</td>
       <td class="py-2 px-3 font-mono text-slate-600 text-[11px]">${escapeHtml(p.identifier_num)}</td>
       <td class="py-2 px-3 text-slate-600">${escapeHtml(p.institution || '-')}</td>
       <td class="py-2 px-3 text-center">
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
-          <i class="fas fa-check mr-1 text-[8px]"></i> Hadir
-        </span>
+        ${isExit ? `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800">
+            <i class="fas fa-sign-out-alt mr-1 text-[8px]"></i> Keluar
+          </span>
+        ` : `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
+            <i class="fas fa-check mr-1 text-[8px]"></i> Di Dalam
+          </span>
+        `}
       </td>
     `;
 

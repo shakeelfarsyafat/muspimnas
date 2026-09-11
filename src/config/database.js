@@ -69,6 +69,7 @@ function initializeDatabase() {
       room_id INTEGER NOT NULL,
       is_attended INTEGER NOT NULL DEFAULT 0,
       attended_at DATETIME NULL,
+      left_at DATETIME NULL,
       UNIQUE(participant_id, room_id),
       FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
       FOREIGN KEY (room_id) REFERENCES court_rooms(id) ON DELETE CASCADE
@@ -78,6 +79,13 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_allocations_room ON room_allocations(room_id);
     CREATE INDEX IF NOT EXISTS idx_allocations_participant ON room_allocations(participant_id);
   `);
+
+  // Migrate schema if left_at doesn't exist yet
+  try {
+    db.exec('ALTER TABLE room_allocations ADD COLUMN left_at DATETIME NULL;');
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
 }
 
 initializeDatabase();

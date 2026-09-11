@@ -45,13 +45,17 @@ const roomService = {
     const stats = db.prepare(`
       SELECT 
         COUNT(ra.id) as allocated_count,
-        SUM(CASE WHEN ra.is_attended = 1 THEN 1 ELSE 0 END) as attended_count
+        SUM(CASE WHEN ra.is_attended = 1 THEN 1 ELSE 0 END) as attended_count,
+        SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NULL THEN 1 ELSE 0 END) as inside_count,
+        SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NOT NULL THEN 1 ELSE 0 END) as exited_count
       FROM room_allocations ra
       WHERE ra.room_id = ?
     `).get(id);
 
     const allocated = Number(stats?.allocated_count || 0);
     const attended = Number(stats?.attended_count || 0);
+    const inside = Number(stats?.inside_count || 0);
+    const exited = Number(stats?.exited_count || 0);
     const capacity = Number(room.capacity);
     const unattended = Math.max(0, allocated - attended);
 
@@ -59,8 +63,10 @@ const roomService = {
       ...room,
       allocated,
       attended,
+      inside,
+      exited,
       unattended,
-      remaining_capacity: Math.max(0, capacity - attended),
+      remaining_capacity: Math.max(0, capacity - inside),
       attendance_percentage: capacity > 0 ? Math.round((attended / capacity) * 100) : 0
     };
   },
