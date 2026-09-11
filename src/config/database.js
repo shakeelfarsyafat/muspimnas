@@ -1,9 +1,24 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-const dataDir = path.join(__dirname, '..', '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Determine writable directory for SQLite database
+// In serverless environments like Vercel (Linux) / AWS Lambda, use os.tmpdir() (/tmp)
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+let dataDir;
+
+if (isServerless) {
+  dataDir = os.tmpdir();
+} else {
+  dataDir = path.join(__dirname, '..', '..', 'data');
+  if (!fs.existsSync(dataDir)) {
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+    } catch (e) {
+      console.warn('Could not create data directory, using os.tmpdir() as fallback:', e);
+      dataDir = os.tmpdir();
+    }
+  }
 }
 
 const dbPath = process.env.DB_PATH || path.join(dataDir, 'muspimnas.db');
@@ -13,8 +28,12 @@ const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(dbPath);
 
 // Enable foreign keys and WAL mode
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA journal_mode = WAL;');
+try {
+  db.exec('PRAGMA foreign_keys = ON;');
+  db.exec('PRAGMA journal_mode = WAL;');
+} catch (e) {
+  console.warn('Pragma setup warning:', e);
+}
 
 // Initialize tables
 function initializeDatabase() {
@@ -68,3 +87,15 @@ module.exports = {
   initializeDatabase,
   dbPath
 };
+
+// Check if database needs initial seeding AFTER module.exports is populated
+try {
+  const adminCheck = db.prepare('SELECT COUNT(*) as count FROM admins').get();
+  if (!adminCheck || Number(adminCheck.count) === 0) {
+    console.log('Database baru terdeteksi. Menjalankan auto-seeding data awal...');
+    const runSeeder = require('../seed/seeder');
+    runSeeder().catch(err => console.error('Auto-seed error:', err));
+  }
+} catch (err) {
+  console.error('Check admin table error:', err);
+}
