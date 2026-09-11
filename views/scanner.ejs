@@ -147,7 +147,7 @@
                 <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px]">
                   <% const eventTime = scan.left_at || scan.attended_at; %>
                   <i class="fas fa-clock <%= scan.left_at ? 'text-amber-500' : 'text-emerald-500' %> mr-1 text-[9px]"></i>
-                  <%= eventTime ? (eventTime.includes(' ') ? eventTime.split(' ')[1] : eventTime) : '-' %>
+                  <%= typeof formatTime === 'function' ? (formatTime(eventTime) || '-') : (eventTime ? String(eventTime).slice(11, 16) : '-') %>
                 </td>
                 <td class="py-2 px-3 font-bold text-slate-900">
                   <%= scan.name %>

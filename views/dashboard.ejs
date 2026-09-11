@@ -237,14 +237,14 @@
                       <i class="fas fa-check-circle mr-1"></i> Hadir (Di Dalam)
                     </span>
                     <div class="text-[11px] text-slate-400 font-mono mt-1">
-                      Masuk: <%= p.attended_at ? p.attended_at.slice(11, 16) : '' %>
+                      Masuk: <%= typeof formatTime === 'function' ? formatTime(p.attended_at) : (p.attended_at ? String(p.attended_at).slice(11, 16) : '') %>
                     </div>
                   <% } else if (p.is_attended && p.left_at) { %>
                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
                       <i class="fas fa-sign-out-alt mr-1"></i> Sudah Keluar
                     </span>
                     <div class="text-[11px] text-slate-400 font-mono mt-1">
-                      Keluar: <%= p.left_at ? p.left_at.slice(11, 16) : '' %>
+                      Keluar: <%= typeof formatTime === 'function' ? formatTime(p.left_at) : (p.left_at ? String(p.left_at).slice(11, 16) : '') %>
                     </div>
                   <% } else { %>
                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">

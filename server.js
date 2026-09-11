@@ -65,10 +65,31 @@ app.use((req, res, next) => {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Helper to format date/time safely across SQLite (string) and Postgres (Date object)
+function formatTime(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const h = String(val.getHours()).padStart(2, '0');
+    const m = String(val.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  const s = String(val);
+  if (s.includes('T')) {
+    const timePart = s.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : s;
+  }
+  if (s.includes(' ')) {
+    const timePart = s.split(' ')[1];
+    return timePart ? timePart.slice(0, 5) : s;
+  }
+  return s.length >= 5 ? s.slice(0, 5) : s;
+}
+
 // Global View Variables (e.g. current path, current admin)
 app.use((req, res, next) => {
   res.locals.currentPath = req.path;
   res.locals.currentAdmin = (req.session && req.session.admin) ? req.session.admin : null;
+  res.locals.formatTime = formatTime;
   next();
 });
 
