@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           <div class="text-right">
             <span class="inline-block px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-mono font-bold text-xs">
-              <i class="fas fa-clock mr-1 text-[10px]"></i> ${p.attended_at ? p.attended_at.slice(11, 19) : 'Baru Saja'}
+              <i class="fas fa-clock mr-1 text-[10px]"></i> ${p.time_display || formatClientTime(p.attended_at)}
             </span>
           </div>
         </div>
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           <div class="text-right">
             <span class="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 font-mono font-bold text-xs">
-              <i class="fas fa-clock mr-1 text-[10px]"></i> Keluar: ${p.left_at ? p.left_at.slice(11, 19) : 'Baru Saja'}
+              <i class="fas fa-clock mr-1 text-[10px]"></i> Keluar: ${p.time_display || formatClientTime(p.left_at)}
             </span>
           </div>
         </div>
@@ -285,6 +285,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function formatClientTime(val) {
+    if (!val) return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace('.', ':');
+    const d = new Date(val);
+    if (isNaN(d.getTime())) {
+      const s = String(val);
+      return s.includes(' ') ? s.split(' ')[1] : s;
+    }
+    return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace('.', ':');
+  }
+
   /**
    * Prepend New Scan Row into Live Database Table
    */
@@ -295,10 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (emptyRow) emptyRow.remove();
 
     const isExit = action === 'KELUAR';
-    const rawTime = isExit ? (p.left_at || p.attended_at) : (p.attended_at || p.left_at);
-    const timeStr = rawTime 
-      ? (rawTime.includes(' ') ? rawTime.split(' ')[1] : rawTime)
-      : new Date().toLocaleTimeString('id-ID');
+    const timeStr = p.time_display || formatClientTime(isExit ? (p.left_at || p.attended_at) : (p.attended_at || p.left_at));
 
     const row = document.createElement('tr');
     row.className = 'table-row-new hover:bg-slate-50/90 transition text-xs';

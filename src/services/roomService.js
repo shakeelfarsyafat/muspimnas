@@ -35,31 +35,37 @@ const roomService = {
   },
 
   /**
-   * Get attendance and capacity statistics for a specific room
+   * Get attendance and capacity statistics for a specific room (Optimized single query)
    */
   async getRoomStats(id) {
-    const room = await this.getRoomById(id);
-    if (!room) return null;
-
-    const stats = await db.get(`
+    const roomWithStats = await db.get(`
       SELECT 
+        cr.*,
         COUNT(ra.id) as allocated_count,
         SUM(CASE WHEN ra.is_attended = 1 THEN 1 ELSE 0 END) as attended_count,
         SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NULL THEN 1 ELSE 0 END) as inside_count,
         SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NOT NULL THEN 1 ELSE 0 END) as exited_count
-      FROM room_allocations ra
-      WHERE ra.room_id = ?
+      FROM court_rooms cr
+      LEFT JOIN room_allocations ra ON ra.room_id = cr.id
+      WHERE cr.id = ?
+      GROUP BY cr.id
     `, [id]);
 
-    const allocated = Number(stats?.allocated_count || 0);
-    const attended = Number(stats?.attended_count || 0);
-    const inside = Number(stats?.inside_count || 0);
-    const exited = Number(stats?.exited_count || 0);
-    const capacity = Number(room.capacity);
+    if (!roomWithStats) return null;
+
+    const allocated = Number(roomWithStats.allocated_count || 0);
+    const attended = Number(roomWithStats.attended_count || 0);
+    const inside = Number(roomWithStats.inside_count || 0);
+    const exited = Number(roomWithStats.exited_count || 0);
+    const capacity = Number(roomWithStats.capacity || 0);
     const unattended = Math.max(0, allocated - attended);
 
     return {
-      ...room,
+      id: roomWithStats.id,
+      room_name: roomWithStats.room_name,
+      session_title: roomWithStats.session_title,
+      capacity,
+      is_active: roomWithStats.is_active,
       allocated,
       attended,
       inside,
@@ -71,19 +77,51 @@ const roomService = {
   },
 
   /**
-   * Get stats for all rooms + overall system stats
+   * Get stats for all rooms + overall system stats (Optimized batch queries)
    */
   async getSystemOverview() {
-    const rooms = await this.getAllRooms();
-    const roomStats = await Promise.all(rooms.map(r => this.getRoomStats(r.id)));
+    const [allRoomStats, countPart, countAlloc, countAtt] = await Promise.all([
+      db.all(`
+        SELECT 
+          cr.*,
+          COUNT(ra.id) as allocated_count,
+          SUM(CASE WHEN ra.is_attended = 1 THEN 1 ELSE 0 END) as attended_count,
+          SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NULL THEN 1 ELSE 0 END) as inside_count,
+          SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NOT NULL THEN 1 ELSE 0 END) as exited_count
+        FROM court_rooms cr
+        LEFT JOIN room_allocations ra ON ra.room_id = cr.id
+        GROUP BY cr.id
+        ORDER BY cr.id ASC
+      `),
+      db.get('SELECT COUNT(*) as c FROM participants'),
+      db.get('SELECT COUNT(DISTINCT participant_id) as c FROM room_allocations'),
+      db.get('SELECT COUNT(*) as c FROM room_allocations WHERE is_attended = 1')
+    ]);
 
-    const countPart = await db.get('SELECT COUNT(*) as c FROM participants');
+    const roomStats = allRoomStats.map(r => {
+      const allocated = Number(r.allocated_count || 0);
+      const attended = Number(r.attended_count || 0);
+      const inside = Number(r.inside_count || 0);
+      const exited = Number(r.exited_count || 0);
+      const capacity = Number(r.capacity || 0);
+      return {
+        id: r.id,
+        room_name: r.room_name,
+        session_title: r.session_title,
+        capacity,
+        is_active: r.is_active,
+        allocated,
+        attended,
+        inside,
+        exited,
+        unattended: Math.max(0, allocated - attended),
+        remaining_capacity: Math.max(0, capacity - inside),
+        attendance_percentage: capacity > 0 ? Math.round((attended / capacity) * 100) : 0
+      };
+    });
+
     const totalParticipants = Number(countPart?.c || 0);
-
-    const countAlloc = await db.get('SELECT COUNT(DISTINCT participant_id) as c FROM room_allocations');
     const totalAllocated = Number(countAlloc?.c || 0);
-
-    const countAtt = await db.get('SELECT COUNT(*) as c FROM room_allocations WHERE is_attended = 1');
     const totalAttended = Number(countAtt?.c || 0);
 
     return {

@@ -9,9 +9,13 @@ const PORT = process.env.PORT || 3000;
 
 // Ensure database schema and seeding are complete before handling requests
 let dbInitPromise = null;
+let isDbReady = false;
 function ensureDbReady() {
+  if (isDbReady) return Promise.resolve();
   if (!dbInitPromise) {
-    dbInitPromise = initializeDatabase().catch(err => {
+    dbInitPromise = initializeDatabase().then(() => {
+      isDbReady = true;
+    }).catch(err => {
       console.error('[Server] Critical DB Init Error:', err);
       dbInitPromise = null; // allow retry
       throw err;
@@ -65,24 +69,25 @@ app.use((req, res, next) => {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Helper to format date/time safely across SQLite (string) and Postgres (Date object)
+// Helper to format date/time safely across SQLite (string) and Postgres (Date object) in Realtime Local Time (WIB)
 function formatTime(val) {
   if (!val) return '';
-  if (val instanceof Date) {
-    const h = String(val.getHours()).padStart(2, '0');
-    const m = String(val.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
+  const d = (val instanceof Date) ? val : new Date(val);
+  if (!isNaN(d.getTime())) {
+    try {
+      const parts = new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(d);
+      return parts.replace(/\./g, ':');
+    } catch (e) {}
   }
   const s = String(val);
-  if (s.includes('T')) {
-    const timePart = s.split('T')[1];
-    return timePart ? timePart.slice(0, 5) : s;
-  }
-  if (s.includes(' ')) {
-    const timePart = s.split(' ')[1];
-    return timePart ? timePart.slice(0, 5) : s;
-  }
-  return s.length >= 5 ? s.slice(0, 5) : s;
+  if (s.includes('T')) return s.split('T')[1]?.slice(0, 5) || s;
+  if (s.includes(' ')) return s.split(' ')[1]?.slice(0, 5) || s;
+  return s.slice(0, 5);
 }
 
 // Global View Variables (e.g. current path, current admin)

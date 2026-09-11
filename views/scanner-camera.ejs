@@ -239,7 +239,7 @@
 
     async function handleScan(token) {
       const now = Date.now();
-      if (token === lastToken && (now - lastTime) < 2500) {
+      if (token === lastToken && (now - lastTime) < 1200) {
         return;
       }
 
@@ -247,6 +247,11 @@
       isProcessing = true;
       lastToken = token;
       lastTime = now;
+
+      // Subtle tap sensation on QR detection
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
 
       const roomId = roomSelect.value;
 
@@ -283,12 +288,14 @@
       } finally {
         setTimeout(() => {
           isProcessing = false;
-        }, 800);
+        }, 300);
       }
     }
 
     function showTransientFeedback(data) {
       if (!feedbackBadge) return;
+
+      const timeStr = data.participant?.time_display || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace('.', ':');
 
       if (data.status === 'SUCCESS' || data.status === 'SUCCESS_REENTRY') {
         feedbackBadge.innerHTML = `
@@ -301,6 +308,9 @@
                 ${data.status === 'SUCCESS_REENTRY' ? 'Masuk Kembali' : 'Presensi Masuk Diterima'}
               </div>
               <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+              <div class="text-[10px] text-emerald-100 flex items-center mt-0.5 font-mono font-semibold">
+                <i class="fas fa-clock mr-1 text-[9px]"></i> ${timeStr} WIB
+              </div>
             </div>
           </div>
         `;
@@ -313,6 +323,9 @@
             <div class="flex-1 min-w-0">
               <div class="text-[10px] uppercase font-bold tracking-wider text-amber-200">Presensi Keluar Berhasil</div>
               <div class="text-sm font-extrabold truncate">${data.participant.name}</div>
+              <div class="text-[10px] text-amber-100 flex items-center mt-0.5 font-mono font-semibold">
+                <i class="fas fa-clock mr-1 text-[9px]"></i> Keluar: ${timeStr} WIB
+              </div>
             </div>
           </div>
         `;
