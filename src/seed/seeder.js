@@ -6,7 +6,7 @@ async function runSeeder() {
   console.log('--- Memulai Database Seeding MUSPIMNAS ---');
 
   // Ensure tables exist
-  initializeDatabase();
+  await initializeDatabase();
 
   // 1. Seed Default Admin
   const adminUsername = 'admin';
@@ -14,13 +14,13 @@ async function runSeeder() {
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(adminPassword, salt);
 
-  const existingAdmin = db.prepare('SELECT id FROM admins WHERE username = ?').get(adminUsername);
+  const existingAdmin = await db.get('SELECT id FROM admins WHERE username = ?', [adminUsername]);
   if (!existingAdmin) {
-    db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(adminUsername, passwordHash);
+    await db.run('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [adminUsername, passwordHash]);
     console.log(`[+] Admin default dibuat: ${adminUsername} / ${adminPassword}`);
   } else {
     // Refresh password hash to ensure admin123 works
-    db.prepare('UPDATE admins SET password_hash = ? WHERE username = ?').run(passwordHash, adminUsername);
+    await db.run('UPDATE admins SET password_hash = ? WHERE username = ?', [passwordHash, adminUsername]);
     console.log(`[*] Admin default diperbarui: ${adminUsername} / ${adminPassword}`);
   }
 
@@ -48,12 +48,12 @@ async function runSeeder() {
 
   const insertedRoomIds = [];
   for (const r of roomsData) {
-    const existingRoom = db.prepare('SELECT id FROM court_rooms WHERE room_name = ?').get(r.room_name);
+    const existingRoom = await db.get('SELECT id FROM court_rooms WHERE room_name = ?', [r.room_name]);
     if (!existingRoom) {
-      const res = db.prepare(`
+      const res = await db.run(`
         INSERT INTO court_rooms (room_name, session_title, capacity, is_active)
         VALUES (?, ?, ?, ?)
-      `).run(r.room_name, r.session_title, r.capacity, r.is_active);
+      `, [r.room_name, r.session_title, r.capacity, r.is_active]);
       insertedRoomIds.push(Number(res.lastInsertRowid));
       console.log(`[+] Ruang Sidang dibuat: ${r.room_name}`);
     } else {
@@ -136,15 +136,15 @@ async function runSeeder() {
   ];
 
   for (const p of participantsData) {
-    let participant = db.prepare('SELECT id, qr_token FROM participants WHERE identifier_num = ?').get(p.identifier_num);
+    let participant = await db.get('SELECT id, qr_token FROM participants WHERE identifier_num = ?', [p.identifier_num]);
     let participantId;
 
     if (!participant) {
       const qr_token = uuidv4();
-      const res = db.prepare(`
+      const res = await db.run(`
         INSERT INTO participants (name, identifier_num, institution, qr_token)
         VALUES (?, ?, ?, ?)
-      `).run(p.name, p.identifier_num, p.institution, qr_token);
+      `, [p.name, p.identifier_num, p.institution, qr_token]);
       participantId = Number(res.lastInsertRowid);
       console.log(`[+] Peserta dibuat: ${p.name} (${p.identifier_num}) -> QR: ${qr_token.slice(0, 8)}...`);
     } else {
@@ -154,21 +154,21 @@ async function runSeeder() {
     // Allocate room if specified
     if (p.roomIdx !== null && insertedRoomIds[p.roomIdx]) {
       const targetRoomId = insertedRoomIds[p.roomIdx];
-      const existingAlloc = db.prepare('SELECT id FROM room_allocations WHERE participant_id = ?').get(participantId);
+      const existingAlloc = await db.get('SELECT id FROM room_allocations WHERE participant_id = ?', [participantId]);
       
       const attendedAt = p.is_attended ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
 
       if (!existingAlloc) {
-        db.prepare(`
+        await db.run(`
           INSERT INTO room_allocations (participant_id, room_id, is_attended, attended_at)
           VALUES (?, ?, ?, ?)
-        `).run(participantId, targetRoomId, p.is_attended, attendedAt);
+        `, [participantId, targetRoomId, p.is_attended, attendedAt]);
       } else {
-        db.prepare(`
+        await db.run(`
           UPDATE room_allocations 
           SET room_id = ?, is_attended = ?, attended_at = ?
           WHERE id = ?
-        `).run(targetRoomId, p.is_attended, attendedAt, existingAlloc.id);
+        `, [targetRoomId, p.is_attended, attendedAt, existingAlloc.id]);
       }
     }
   }

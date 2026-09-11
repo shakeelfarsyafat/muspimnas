@@ -5,38 +5,43 @@ const participantService = require('../services/participantService');
 const roomService = require('../services/roomService');
 
 // GET / or /dashboard (Requires Admin Auth)
-router.get(['/', '/dashboard'], requireAuth, (req, res) => {
-  const { search = '', room = '', status = '', page = 1 } = req.query;
+router.get(['/', '/dashboard'], requireAuth, async (req, res) => {
+  try {
+    const { search = '', room = '', status = '', page = 1 } = req.query;
 
-  const data = participantService.getAllParticipants({
-    search,
-    roomId: room,
-    attendanceStatus: status,
-    page: parseInt(page, 10) || 1,
-    limit: 25
-  });
+    const data = await participantService.getAllParticipants({
+      search,
+      roomId: room,
+      attendanceStatus: status,
+      page: parseInt(page, 10) || 1,
+      limit: 25
+    });
 
-  const rooms = roomService.getAllRooms({ activeOnly: true });
-  const systemOverview = roomService.getSystemOverview();
+    const rooms = await roomService.getAllRooms({ activeOnly: true });
+    const systemOverview = await roomService.getSystemOverview();
 
-  res.render('dashboard', {
-    title: 'Dashboard Manajemen Peserta Sidang',
-    currentAdmin: req.session.admin,
-    participants: data.participants,
-    total: data.total,
-    page: data.page,
-    totalPages: data.totalPages,
-    rooms,
-    systemOverview,
-    query: { search, room, status }
-  });
+    res.render('dashboard', {
+      title: 'Dashboard Manajemen Peserta Sidang',
+      currentAdmin: req.session.admin,
+      participants: data.participants,
+      total: data.total,
+      page: data.page,
+      totalPages: data.totalPages,
+      rooms,
+      systemOverview,
+      query: { search, room, status }
+    });
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    res.status(500).send('Terjadi kesalahan memuat dashboard: ' + err.message);
+  }
 });
 
 // Protect participant APIs
 router.use('/api/participants', requireAuth);
 
 // API: Add new participant
-router.post('/api/participants', (req, res) => {
+router.post('/api/participants', async (req, res) => {
   try {
     const { name, identifier_num, institution, room_id } = req.body;
     if (!name || !identifier_num) {
@@ -46,7 +51,7 @@ router.post('/api/participants', (req, res) => {
       });
     }
 
-    const participant = participantService.createParticipant({
+    const participant = await participantService.createParticipant({
       name,
       identifier_num,
       institution,
@@ -67,16 +72,20 @@ router.post('/api/participants', (req, res) => {
 });
 
 // API: Get single participant
-router.get('/api/participants/:id', (req, res) => {
-  const participant = participantService.getParticipantById(req.params.id);
-  if (!participant) {
-    return res.status(404).json({ success: false, message: 'Peserta tidak ditemukan.' });
+router.get('/api/participants/:id', async (req, res) => {
+  try {
+    const participant = await participantService.getParticipantById(req.params.id);
+    if (!participant) {
+      return res.status(404).json({ success: false, message: 'Peserta tidak ditemukan.' });
+    }
+    return res.json({ success: true, participant });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
-  return res.json({ success: true, participant });
 });
 
 // API: Update participant
-router.put('/api/participants/:id', (req, res) => {
+router.put('/api/participants/:id', async (req, res) => {
   try {
     const { name, identifier_num, institution, room_id } = req.body;
     if (!name || !identifier_num) {
@@ -86,7 +95,7 @@ router.put('/api/participants/:id', (req, res) => {
       });
     }
 
-    const updated = participantService.updateParticipant(req.params.id, {
+    const updated = await participantService.updateParticipant(req.params.id, {
       name,
       identifier_num,
       institution,
@@ -107,9 +116,9 @@ router.put('/api/participants/:id', (req, res) => {
 });
 
 // API: Delete participant
-router.delete('/api/participants/:id', (req, res) => {
+router.delete('/api/participants/:id', async (req, res) => {
   try {
-    const success = participantService.deleteParticipant(req.params.id);
+    const success = await participantService.deleteParticipant(req.params.id);
     if (!success) {
       return res.status(404).json({ success: false, message: 'Peserta tidak ditemukan.' });
     }
@@ -120,7 +129,7 @@ router.delete('/api/participants/:id', (req, res) => {
 });
 
 // API: Bulk Assign Participants to a Room
-router.post('/api/participants/bulk-assign', (req, res) => {
+router.post('/api/participants/bulk-assign', async (req, res) => {
   try {
     const { participant_ids, room_id } = req.body;
 
@@ -138,7 +147,7 @@ router.post('/api/participants/bulk-assign', (req, res) => {
       });
     }
 
-    const result = participantService.bulkAssignRoom(participant_ids, room_id);
+    const result = await participantService.bulkAssignRoom(participant_ids, room_id);
 
     return res.json({
       success: true,
@@ -154,10 +163,10 @@ router.post('/api/participants/bulk-assign', (req, res) => {
 });
 
 // API: Reset attendance
-router.post('/api/participants/:id/reset-attendance', (req, res) => {
+router.post('/api/participants/:id/reset-attendance', async (req, res) => {
   try {
     const { room_id } = req.body;
-    const participant = participantService.getParticipantById(req.params.id);
+    const participant = await participantService.getParticipantById(req.params.id);
     if (!participant) {
       return res.status(404).json({ success: false, message: 'Peserta tidak ditemukan.' });
     }
@@ -168,7 +177,7 @@ router.post('/api/participants/:id/reset-attendance', (req, res) => {
     }
 
     const verificationService = require('../services/verificationService');
-    verificationService.resetAttendance(participant.id, targetRoomId);
+    await verificationService.resetAttendance(participant.id, targetRoomId);
 
     return res.json({
       success: true,

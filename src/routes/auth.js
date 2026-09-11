@@ -21,7 +21,7 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username.trim());
+    const admin = await db.get('SELECT * FROM admins WHERE username = ?', [username.trim()]);
     if (!admin) {
       req.session.loginError = 'Username atau password salah!';
       return res.redirect('/login');

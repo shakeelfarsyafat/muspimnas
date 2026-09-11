@@ -1,48 +1,47 @@
 const { db } = require('../config/database');
 
 const roomService = {
-  getAllRooms({ activeOnly = false } = {}) {
+  async getAllRooms({ activeOnly = false } = {}) {
     const sql = activeOnly
       ? 'SELECT * FROM court_rooms WHERE is_active = 1 ORDER BY room_name ASC'
       : 'SELECT * FROM court_rooms ORDER BY id ASC';
-    return db.prepare(sql).all();
+    return await db.all(sql);
   },
 
-  getRoomById(id) {
-    return db.prepare('SELECT * FROM court_rooms WHERE id = ?').get(id);
+  async getRoomById(id) {
+    return await db.get('SELECT * FROM court_rooms WHERE id = ?', [id]);
   },
 
-  createRoom({ room_name, session_title, capacity = 50, is_active = 1 }) {
-    const stmt = db.prepare(`
+  async createRoom({ room_name, session_title, capacity = 50, is_active = 1 }) {
+    const res = await db.run(`
       INSERT INTO court_rooms (room_name, session_title, capacity, is_active)
       VALUES (?, ?, ?, ?)
-    `);
-    const result = stmt.run(room_name.trim(), session_title.trim(), Number(capacity), Number(is_active));
-    return this.getRoomById(Number(result.lastInsertRowid));
+    `, [room_name.trim(), session_title.trim(), Number(capacity), Number(is_active)]);
+    return await this.getRoomById(Number(res.lastInsertRowid));
   },
 
-  updateRoom(id, { room_name, session_title, capacity, is_active }) {
-    db.prepare(`
+  async updateRoom(id, { room_name, session_title, capacity, is_active }) {
+    await db.run(`
       UPDATE court_rooms 
       SET room_name = ?, session_title = ?, capacity = ?, is_active = ?
       WHERE id = ?
-    `).run(room_name.trim(), session_title.trim(), Number(capacity), Number(is_active), id);
-    return this.getRoomById(id);
+    `, [room_name.trim(), session_title.trim(), Number(capacity), Number(is_active), id]);
+    return await this.getRoomById(id);
   },
 
-  deleteRoom(id) {
-    const result = db.prepare('DELETE FROM court_rooms WHERE id = ?').run(id);
+  async deleteRoom(id) {
+    const result = await db.run('DELETE FROM court_rooms WHERE id = ?', [id]);
     return result.changes > 0;
   },
 
   /**
    * Get attendance and capacity statistics for a specific room
    */
-  getRoomStats(id) {
-    const room = this.getRoomById(id);
+  async getRoomStats(id) {
+    const room = await this.getRoomById(id);
     if (!room) return null;
 
-    const stats = db.prepare(`
+    const stats = await db.get(`
       SELECT 
         COUNT(ra.id) as allocated_count,
         SUM(CASE WHEN ra.is_attended = 1 THEN 1 ELSE 0 END) as attended_count,
@@ -50,7 +49,7 @@ const roomService = {
         SUM(CASE WHEN ra.is_attended = 1 AND ra.left_at IS NOT NULL THEN 1 ELSE 0 END) as exited_count
       FROM room_allocations ra
       WHERE ra.room_id = ?
-    `).get(id);
+    `, [id]);
 
     const allocated = Number(stats?.allocated_count || 0);
     const attended = Number(stats?.attended_count || 0);
@@ -74,13 +73,18 @@ const roomService = {
   /**
    * Get stats for all rooms + overall system stats
    */
-  getSystemOverview() {
-    const rooms = this.getAllRooms();
-    const roomStats = rooms.map(r => this.getRoomStats(r.id));
+  async getSystemOverview() {
+    const rooms = await this.getAllRooms();
+    const roomStats = await Promise.all(rooms.map(r => this.getRoomStats(r.id)));
 
-    const totalParticipants = Number(db.prepare('SELECT COUNT(*) as c FROM participants').get()?.c || 0);
-    const totalAllocated = Number(db.prepare('SELECT COUNT(DISTINCT participant_id) as c FROM room_allocations').get()?.c || 0);
-    const totalAttended = Number(db.prepare('SELECT COUNT(*) as c FROM room_allocations WHERE is_attended = 1').get()?.c || 0);
+    const countPart = await db.get('SELECT COUNT(*) as c FROM participants');
+    const totalParticipants = Number(countPart?.c || 0);
+
+    const countAlloc = await db.get('SELECT COUNT(DISTINCT participant_id) as c FROM room_allocations');
+    const totalAllocated = Number(countAlloc?.c || 0);
+
+    const countAtt = await db.get('SELECT COUNT(*) as c FROM room_allocations WHERE is_attended = 1');
+    const totalAttended = Number(countAtt?.c || 0);
 
     return {
       totalParticipants,

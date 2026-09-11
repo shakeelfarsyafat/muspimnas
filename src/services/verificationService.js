@@ -3,13 +3,8 @@ const { db } = require('../config/database');
 const verificationService = {
   /**
    * Verify QR token scan against selected room (Supports 'in' or 'out' mode)
-   * 
-   * @param {string} qrToken - Scanned QR token (UUID)
-   * @param {number|string} roomId - Guarded court room ID
-   * @param {string} mode - 'in' (Masuk/Hadir) or 'out' (Keluar Ruangan)
-   * @returns {object} Verification result with status, message, and participant data
    */
-  verifyScan(qrToken, roomId, mode = 'in') {
+  async verifyScan(qrToken, roomId, mode = 'in') {
     if (!qrToken || typeof qrToken !== 'string') {
       return {
         status: 'INVALID_TOKEN',
@@ -23,7 +18,7 @@ const verificationService = {
     const scanMode = mode === 'out' ? 'out' : 'in';
 
     // Verify room exists and active
-    const targetRoom = db.prepare('SELECT * FROM court_rooms WHERE id = ?').get(targetRoomId);
+    const targetRoom = await db.get('SELECT * FROM court_rooms WHERE id = ?', [targetRoomId]);
     if (!targetRoom) {
       return {
         status: 'ROOM_NOT_FOUND',
@@ -33,7 +28,7 @@ const verificationService = {
     }
 
     // 1. Find participant by token
-    const participant = db.prepare('SELECT * FROM participants WHERE qr_token = ?').get(cleanToken);
+    const participant = await db.get('SELECT * FROM participants WHERE qr_token = ?', [cleanToken]);
     if (!participant) {
       return {
         status: 'INVALID_TOKEN',
@@ -43,12 +38,12 @@ const verificationService = {
     }
 
     // 2. Check room allocation
-    const allocation = db.prepare(`
+    const allocation = await db.get(`
       SELECT ra.*, cr.room_name, cr.session_title 
       FROM room_allocations ra
       JOIN court_rooms cr ON ra.room_id = cr.id
       WHERE ra.participant_id = ?
-    `).get(participant.id);
+    `, [participant.id]);
 
     if (!allocation) {
       return {
@@ -115,13 +110,13 @@ const verificationService = {
       }
 
       // Record exit timestamp
-      db.prepare(`
+      await db.run(`
         UPDATE room_allocations 
         SET left_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(allocation.id);
+      `, [allocation.id]);
 
-      const updatedAllocation = db.prepare('SELECT attended_at, left_at FROM room_allocations WHERE id = ?').get(allocation.id);
+      const updatedAllocation = await db.get('SELECT attended_at, left_at FROM room_allocations WHERE id = ?', [allocation.id]);
 
       return {
         status: 'SUCCESS_OUT',
@@ -135,8 +130,8 @@ const verificationService = {
           institution: participant.institution,
           room_name: targetRoom.room_name,
           session_title: targetRoom.session_title,
-          attended_at: updatedAllocation.attended_at,
-          left_at: updatedAllocation.left_at
+          attended_at: updatedAllocation?.attended_at,
+          left_at: updatedAllocation?.left_at
         }
       };
     }
@@ -164,13 +159,13 @@ const verificationService = {
     // If re-entering after previously exiting
     const isReentry = allocation.is_attended === 1 && allocation.left_at;
 
-    db.prepare(`
+    await db.run(`
       UPDATE room_allocations 
       SET is_attended = 1, attended_at = CURRENT_TIMESTAMP, left_at = NULL
       WHERE id = ?
-    `).run(allocation.id);
+    `, [allocation.id]);
 
-    const updatedAllocation = db.prepare('SELECT attended_at, left_at FROM room_allocations WHERE id = ?').get(allocation.id);
+    const updatedAllocation = await db.get('SELECT attended_at, left_at FROM room_allocations WHERE id = ?', [allocation.id]);
 
     return {
       status: isReentry ? 'SUCCESS_REENTRY' : 'SUCCESS',
@@ -186,7 +181,7 @@ const verificationService = {
         institution: participant.institution,
         room_name: targetRoom.room_name,
         session_title: targetRoom.session_title,
-        attended_at: updatedAllocation.attended_at,
+        attended_at: updatedAllocation?.attended_at,
         left_at: null
       }
     };
@@ -195,8 +190,8 @@ const verificationService = {
   /**
    * Get recent scans for a specific room to display live feed (Both Masuk & Keluar)
    */
-  getRecentScans(roomId, limit = 15) {
-    return db.prepare(`
+  async getRecentScans(roomId, limit = 15) {
+    return await db.all(`
       SELECT 
         p.name,
         p.identifier_num,
@@ -215,18 +210,18 @@ const verificationService = {
       WHERE ra.room_id = ? AND ra.is_attended = 1
       ORDER BY COALESCE(ra.left_at, ra.attended_at) DESC
       LIMIT ?
-    `).all(Number(roomId), limit);
+    `, [Number(roomId), limit]);
   },
 
   /**
    * Reset attendance for a participant (Admin override)
    */
-  resetAttendance(participantId, roomId) {
-    db.prepare(`
+  async resetAttendance(participantId, roomId) {
+    await db.run(`
       UPDATE room_allocations 
       SET is_attended = 0, attended_at = NULL, left_at = NULL
       WHERE participant_id = ? AND room_id = ?
-    `).run(participantId, roomId);
+    `, [participantId, roomId]);
     return true;
   }
 };

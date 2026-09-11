@@ -22,49 +22,59 @@ function broadcastScanEvent(roomId, data) {
 }
 
 // GET /scanner - Main Monitor Display & Database History Table (Requires Admin Auth)
-router.get('/scanner', requireAuth, (req, res) => {
-  const rooms = roomService.getAllRooms({ activeOnly: true });
-  const selectedRoomId = req.query.room_id || (rooms.length > 0 ? rooms[0].id : null);
+router.get('/scanner', requireAuth, async (req, res) => {
+  try {
+    const rooms = await roomService.getAllRooms({ activeOnly: true });
+    const selectedRoomId = req.query.room_id || (rooms.length > 0 ? rooms[0].id : null);
 
-  let currentRoomStats = null;
-  let recentScans = [];
+    let currentRoomStats = null;
+    let recentScans = [];
 
-  if (selectedRoomId) {
-    currentRoomStats = roomService.getRoomStats(selectedRoomId);
-    recentScans = verificationService.getRecentScans(selectedRoomId, 15);
+    if (selectedRoomId) {
+      currentRoomStats = await roomService.getRoomStats(selectedRoomId);
+      recentScans = await verificationService.getRecentScans(selectedRoomId, 15);
+    }
+
+    res.render('scanner', {
+      title: 'Monitor Display & Riwayat Sidang (Kiosk Display)',
+      currentAdmin: req.session.admin,
+      rooms,
+      selectedRoomId: Number(selectedRoomId),
+      currentRoomStats,
+      recentScans
+    });
+  } catch (err) {
+    console.error('Scanner page error:', err);
+    res.status(500).send('Terjadi kesalahan memuat scanner: ' + err.message);
   }
-
-  res.render('scanner', {
-    title: 'Monitor Display & Riwayat Sidang (Kiosk Display)',
-    currentAdmin: req.session.admin,
-    rooms,
-    selectedRoomId: Number(selectedRoomId),
-    currentRoomStats,
-    recentScans
-  });
 });
 
 // GET /scanner/camera - Dedicated Camera Scanner (For Guard Phone / Mobile Device)
-router.get('/scanner/camera', (req, res) => {
-  const rooms = roomService.getAllRooms({ activeOnly: true });
-  const selectedRoomId = req.query.room_id || (rooms.length > 0 ? rooms[0].id : null);
+router.get('/scanner/camera', async (req, res) => {
+  try {
+    const rooms = await roomService.getAllRooms({ activeOnly: true });
+    const selectedRoomId = req.query.room_id || (rooms.length > 0 ? rooms[0].id : null);
 
-  let currentRoomStats = null;
-  if (selectedRoomId) {
-    currentRoomStats = roomService.getRoomStats(selectedRoomId);
+    let currentRoomStats = null;
+    if (selectedRoomId) {
+      currentRoomStats = await roomService.getRoomStats(selectedRoomId);
+    }
+
+    res.render('scanner-camera', {
+      title: 'Kamera Pemindai Pintu Sidang (HP / Mobile Gate)',
+      currentAdmin: req.session.admin,
+      rooms,
+      selectedRoomId: Number(selectedRoomId),
+      currentRoomStats
+    });
+  } catch (err) {
+    console.error('Scanner camera error:', err);
+    res.status(500).send('Terjadi kesalahan memuat kamera: ' + err.message);
   }
-
-  res.render('scanner-camera', {
-    title: 'Kamera Pemindai Pintu Sidang (HP / Mobile Gate)',
-    currentAdmin: req.session.admin,
-    rooms,
-    selectedRoomId: Number(selectedRoomId),
-    currentRoomStats
-  });
 });
 
 // POST /api/verify/scan - Core scan verification API
-router.post('/api/verify/scan', (req, res) => {
+router.post('/api/verify/scan', async (req, res) => {
   try {
     const { qr_token, room_id, mode = 'in' } = req.body;
 
@@ -84,8 +94,8 @@ router.post('/api/verify/scan', (req, res) => {
       });
     }
 
-    const result = verificationService.verifyScan(qr_token, room_id, mode);
-    const roomStats = roomService.getRoomStats(room_id);
+    const result = await verificationService.verifyScan(qr_token, room_id, mode);
+    const roomStats = await roomService.getRoomStats(room_id);
 
     const responseData = {
       ...result,
@@ -137,11 +147,11 @@ router.get('/api/verify/live-events/:roomId', (req, res) => {
 });
 
 // GET /api/verify/recent/:roomId - Get recent scans for live feed
-router.get('/api/verify/recent/:roomId', (req, res) => {
+router.get('/api/verify/recent/:roomId', async (req, res) => {
   try {
     const { roomId } = req.params;
-    const recent = verificationService.getRecentScans(roomId, 15);
-    const stats = roomService.getRoomStats(roomId);
+    const recent = await verificationService.getRecentScans(roomId, 15);
+    const stats = await roomService.getRoomStats(roomId);
 
     return res.json({
       success: true,

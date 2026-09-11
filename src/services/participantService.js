@@ -6,96 +6,95 @@ const participantService = {
   /**
    * Create a new participant with unique UUID v4 qr_token
    */
-  createParticipant({ name, identifier_num, institution = '', roomId = null }) {
+  async createParticipant({ name, identifier_num, institution = '', roomId = null }) {
     const qr_token = uuidv4();
 
     // Check unique identifier_num
-    const existing = db.prepare('SELECT id FROM participants WHERE identifier_num = ?').get(identifier_num);
+    const existing = await db.get('SELECT id FROM participants WHERE identifier_num = ?', [identifier_num]);
     if (existing) {
       throw new Error(`NIM/NIK ${identifier_num} sudah terdaftar dalam sistem.`);
     }
 
-    const insertStmt = db.prepare(`
+    const result = await db.run(`
       INSERT INTO participants (name, identifier_num, institution, qr_token)
       VALUES (?, ?, ?, ?)
-    `);
-
-    const result = insertStmt.run(name.trim(), identifier_num.trim(), institution.trim(), qr_token);
+    `, [name.trim(), identifier_num.trim(), institution.trim(), qr_token]);
+    
     const participantId = Number(result.lastInsertRowid);
 
     if (roomId) {
-      this.assignRoom(participantId, Number(roomId));
+      await this.assignRoom(participantId, Number(roomId));
     }
 
-    return this.getParticipantById(participantId);
+    return await this.getParticipantById(participantId);
   },
 
   /**
    * Update participant details and optional room allocation
    */
-  updateParticipant(id, { name, identifier_num, institution = '', roomId = null }) {
-    const existing = db.prepare('SELECT id FROM participants WHERE identifier_num = ? AND id != ?').get(identifier_num, id);
+  async updateParticipant(id, { name, identifier_num, institution = '', roomId = null }) {
+    const existing = await db.get('SELECT id FROM participants WHERE identifier_num = ? AND id != ?', [identifier_num, id]);
     if (existing) {
       throw new Error(`NIM/NIK ${identifier_num} sudah digunakan oleh peserta lain.`);
     }
 
-    db.prepare(`
+    await db.run(`
       UPDATE participants 
       SET name = ?, identifier_num = ?, institution = ?
       WHERE id = ?
-    `).run(name.trim(), identifier_num.trim(), institution.trim(), id);
+    `, [name.trim(), identifier_num.trim(), institution.trim(), id]);
 
     if (roomId !== undefined) {
       if (roomId) {
-        this.assignRoom(id, Number(roomId));
+        await this.assignRoom(id, Number(roomId));
       } else {
         // Remove room allocation if cleared
-        db.prepare('DELETE FROM room_allocations WHERE participant_id = ?').run(id);
+        await db.run('DELETE FROM room_allocations WHERE participant_id = ?', [id]);
       }
     }
 
-    return this.getParticipantById(id);
+    return await this.getParticipantById(id);
   },
 
   /**
    * Delete participant
    */
-  deleteParticipant(id) {
-    db.prepare('DELETE FROM room_allocations WHERE participant_id = ?').run(id);
-    const result = db.prepare('DELETE FROM participants WHERE id = ?').run(id);
+  async deleteParticipant(id) {
+    await db.run('DELETE FROM room_allocations WHERE participant_id = ?', [id]);
+    const result = await db.run('DELETE FROM participants WHERE id = ?', [id]);
     return result.changes > 0;
   },
 
   /**
    * Assign or reassign participant to a room
    */
-  assignRoom(participantId, roomId) {
+  async assignRoom(participantId, roomId) {
     // Check if participant already has an allocation
-    const existing = db.prepare('SELECT id, room_id FROM room_allocations WHERE participant_id = ?').get(participantId);
+    const existing = await db.get('SELECT id, room_id FROM room_allocations WHERE participant_id = ?', [participantId]);
     if (existing) {
-      db.prepare('UPDATE room_allocations SET room_id = ? WHERE participant_id = ?').run(roomId, participantId);
+      await db.run('UPDATE room_allocations SET room_id = ? WHERE participant_id = ?', [roomId, participantId]);
     } else {
-      db.prepare('INSERT INTO room_allocations (participant_id, room_id, is_attended) VALUES (?, ?, 0)').run(participantId, roomId);
+      await db.run('INSERT INTO room_allocations (participant_id, room_id, is_attended) VALUES (?, ?, 0)', [participantId, roomId]);
     }
   },
 
   /**
    * Bulk assign multiple participants to a room
    */
-  bulkAssignRoom(participantIds, roomId) {
+  async bulkAssignRoom(participantIds, roomId) {
     if (!Array.isArray(participantIds) || participantIds.length === 0) {
       throw new Error('Tidak ada peserta yang dipilih untuk penugasan ruangan.');
     }
 
     // Verify room exists
-    const room = db.prepare('SELECT id, room_name FROM court_rooms WHERE id = ?').get(roomId);
+    const room = await db.get('SELECT id, room_name FROM court_rooms WHERE id = ?', [roomId]);
     if (!room) {
       throw new Error('Ruangan sidang yang dipilih tidak ditemukan.');
     }
 
     let updatedCount = 0;
     for (const pId of participantIds) {
-      this.assignRoom(Number(pId), Number(roomId));
+      await this.assignRoom(Number(pId), Number(roomId));
       updatedCount++;
     }
 
@@ -108,8 +107,8 @@ const participantService = {
   /**
    * Get single participant with full allocation details
    */
-  getParticipantById(id) {
-    return db.prepare(`
+  async getParticipantById(id) {
+    return await db.get(`
       SELECT 
         p.*,
         ra.room_id,
@@ -122,14 +121,14 @@ const participantService = {
       LEFT JOIN room_allocations ra ON p.id = ra.participant_id
       LEFT JOIN court_rooms cr ON ra.room_id = cr.id
       WHERE p.id = ?
-    `).get(id);
+    `, [id]);
   },
 
   /**
    * Find participant by QR Token
    */
-  getParticipantByToken(token) {
-    return db.prepare(`
+  async getParticipantByToken(token) {
+    return await db.get(`
       SELECT 
         p.*,
         ra.room_id,
@@ -142,18 +141,18 @@ const participantService = {
       LEFT JOIN room_allocations ra ON p.id = ra.participant_id
       LEFT JOIN court_rooms cr ON ra.room_id = cr.id
       WHERE p.qr_token = ?
-    `).get(token);
+    `, [token]);
   },
 
   /**
    * Get all participants with filters, search, and pagination
    */
-  getAllParticipants({ search = '', roomId = '', attendanceStatus = '', page = 1, limit = 50 } = {}) {
+  async getAllParticipants({ search = '', roomId = '', attendanceStatus = '', page = 1, limit = 50 } = {}) {
     const conditions = [];
     const params = [];
 
     if (search) {
-      conditions.push('(p.name LIKE ? OR p.identifier_num LIKE ? OR p.institution LIKE ?)');
+      conditions.push('(LOWER(p.name) LIKE LOWER(?) OR LOWER(p.identifier_num) LIKE LOWER(?) OR LOWER(p.institution) LIKE LOWER(?))');
       const s = `%${search}%`;
       params.push(s, s, s);
     }
@@ -186,7 +185,7 @@ const participantService = {
       LEFT JOIN room_allocations ra ON p.id = ra.participant_id
       ${whereClause}
     `;
-    const countRow = db.prepare(countSql).get(...params);
+    const countRow = await db.get(countSql, params);
     const total = countRow ? Number(countRow.total) : 0;
 
     // Data query
@@ -213,7 +212,7 @@ const participantService = {
       LIMIT ? OFFSET ?
     `;
     
-    const rows = db.prepare(dataSql).all(...params, limit, offset);
+    const rows = await db.all(dataSql, [...params, limit, offset]);
 
     return {
       participants: rows,
@@ -246,7 +245,7 @@ const participantService = {
       ORDER BY p.id ASC
     `;
 
-    const rows = db.prepare(sql).all(...ids.map(Number));
+    const rows = await db.all(sql, ids.map(Number));
 
     // Generate DataURL QR Code for each
     const cards = await Promise.all(
