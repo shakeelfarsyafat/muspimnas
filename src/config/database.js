@@ -18,7 +18,10 @@ if (isPostgres) {
   console.log('[Database] Menggunakan Neon PostgreSQL (Cloud)');
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    max: 10
   });
 
   db = {
